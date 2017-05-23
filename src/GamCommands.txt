@@ -322,7 +322,7 @@ Specify a collection of items by directly specifying them; the item type is dete
 <SchemaEntity> ::= <SchemaNameList> | <FileSelector> | <CSVkmdSelector>
 <SiteACLScopeEntity>::= <SiteACLScopeList> | <FileSelector> | <CSVkmdSelector> | <CSVDataSelector>
 <SiteEntity> ::= <SiteList> | <FileSelector> | <CSVkmdSelector> | <CSVDataSelector>
-<TeamDriveRootEntity> ::= <TeamDriveID> | (teamdriveid <TeamDriveID>) | (teamdriveid:<TeamDriveID>) | (teamdrive <TeamDriveName>) | (teamdrive:<TeamDriveName>)
+<TeamDriveEntity> ::= <TeamDriveID> | (teamdriveid <TeamDriveID>) | (teamdriveid:<TeamDriveID>) | (teamdrive <TeamDriveName>) | (teamdrive:<TeamDriveName>)
 <ThreadIDEntity> ::= <ThreadIDList> | <FileSelector> | <CSVkmdSelector> | <CSVDataSelector>
 <UserEntity> ::= <UserList> | <FileSelector> | <CSVkmdSelector> | <CSVDataSelector>
 
