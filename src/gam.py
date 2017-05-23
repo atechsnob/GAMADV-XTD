@@ -19,7 +19,7 @@
 u"""GAM is a command line tool which allows Administrators to control their G Suite domain and accounts.
 
 With GAM you can programatically create users, turn on/off services for users like POP and Forwarding and much more.
-For more information, see https://github.com/taers232c/GAMADV-X
+For more information, see https://github.com/taers232c/GAMADV-XTD
 """
 
 __author__ = u'Ross Scroggs <ross.scroggs@gmail.com>'
@@ -121,7 +121,7 @@ Go to the following link in your browser:
 """
 
 GIT_USER = u'taers232c'
-GAM = u'GAMADV-X'
+GAM = u'GAMADV-XTD'
 GAM_URL = u'https://github.com/{0}/{1}'.format(GIT_USER, GAM)
 GAM_INFO = u'GAM {0} - {1} / {2} / Python {3}.{4}.{5} {6} / {7} {8} /'.format(__version__, GAM_URL,
                                                                               __author__,
