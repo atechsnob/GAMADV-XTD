@@ -142,7 +142,7 @@ For these commands, <DriveFileEntity> is extended:
     gam <UserTypeEntity> show drivefileacl <DriveFileEntity> [showtitles]
     gam <UserTypeEntity> print drivefileacl <DriveFileEntity> [todrive [<ToDriveAttributes>]] [showtitles]
 
-To manage permisson roles for files/folders on a Team Drive, <DriveFileEntity> is extended:
+To manage permission roles for files/folders on a Team Drive, <DriveFileEntity> is extended:
     <TeamDriveFileNameEntity> ::= (teamdrivefilename <DriveFileName>) | (teamdrivefilename:<DriveFileName>)
     <TeamDriveFileQueryEntity> ::= (teamdrivequery <QueryDriveFile>) | (teamdrivequery:<QueryDriveFile>)
     <DriveFileEntity> ::=
@@ -199,7 +199,7 @@ user: Lists files that the user has accessed, including both Team Drive and non-
 	[select <DriveFileEntity>|orphans] [depth <Number>] (orderby <DriveOrderByFieldName> [ascending|descending])*
 	[filepath] [allfields|<DriveFieldName>*|(fields <DriveFiledNameList>)] [delimiter <String>]
 
-To delete empty folders on a Team Drive, the delete emptydrivefolders has been extended.
+To delete empty folders on a Team Drive, the delete emptydrivefolders command has been extended.
     gam <UserTypeEntity> delete emptydrivefolders [<TeamDriveEntity>]
 
 To empty the trash on a Team Drive, the empty drivetrash command has been extended.
@@ -209,6 +209,8 @@ The following commands are not applicable to Team Drives.
     gam <UserTypeEntity> transfer drive <UserItem> [keepuser]
     gam <UserTypeEntity> transfer ownership <DriveFileEntity> <UserItem> [includetrashed] (orderby <DriveOrderByFieldName> [ascending|descending])* [preview] [filepath] [todrive [<ToDriveAttributes>]]
     gam <UserTypeEntity> claim ownership <DriveFileEntity> [skipids <DriveFileEntity>] [skipusers <UserTypeEntity>] [subdomains <DomainNameEntity>] [includetrashed] [restricted [<Boolean>]] [writerscantshare [<Boolean>]] [preview] [filepath] [todrive [<ToDriveAttributes>]]
+    gam <UserTypeEntity> collect orphans (orderby <DriveOrderByFieldName> [ascending|descending])*
+	[targetuserfoldername <DriveFileName>] [preview] [todrive [<ToDriveAttributes>]]
 
 4.44.53
 
