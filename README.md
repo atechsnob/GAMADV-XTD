@@ -95,11 +95,10 @@ Section: DEFAULT
   message_max_results = 1000
   never_time = Never
   no_browser = false
-  no_browser = false
   no_cache = false
   no_update_check = false
   no_verify_ssl = false
-  num_threads = 25
+  num_threads = 5
   oauth2_txt = oauth2.txt ; /Users/admin/.gam/oauth2.txt
   oauth2service_json = oauth2service.json ; /Users/admin/.gam/oauth2service.json
   section = ''
