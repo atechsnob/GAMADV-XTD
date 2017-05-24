@@ -23,7 +23,7 @@ For more information, see https://github.com/taers232c/GAMADV-XTD
 """
 
 __author__ = u'Ross Scroggs <ross.scroggs@gmail.com>'
-__version__ = u'4.50.00'
+__version__ = u'4.50.01'
 __license__ = u'Apache License 2.0 (http://www.apache.org/licenses/LICENSE-2.0)'
 
 import sys
@@ -18679,11 +18679,110 @@ def showDriveFileInfo(users):
         break
     Ind.Decrement()
 
-# gam <UserTypeEntity> show filerevisions <DriveFileEntity>
-def showDriveFileRevisions(users):
+# gam <UserTypeEntity> delete filerevision <DriveFileEntity> <DriveFileRevisionId> [showtitles]
+def deleteDriveFileRevisions(users):
   fileIdEntity = getDriveFileEntity()
   body, parameters = initializeDriveFileAttributes()
+  revisionId = getString(Cmd.OB_DRIVE_FILE_REVISION_ID)
+  showTitles = True if checkArgumentPresent(Cmd.SHOWTITLES_ARGUMENT) else False
   checkForExtraneousArguments()
+  i, count, users = getEntityArgument(users)
+  for user in users:
+    i += 1
+    user, drive, jcount = _validateUserGetFileIDs(user, i, count, fileIdEntity, body, parameters, entityType=Ent.DRIVE_FILE_REVISION)
+    if jcount == 0:
+      continue
+    Ind.Increment()
+    j = 0
+    for fileId in fileIdEntity[u'list']:
+      j += 1
+      try:
+        fileName = fileId
+        entityType = Ent.DRIVE_FILE_OR_FOLDER_ID
+        if showTitles:
+          fileName, entityType = _getDriveFileNameFromId(drive, fileId)
+        callGAPI(drive.revisions(), u'delete',
+                 throw_reasons=GAPI.DRIVE_USER_THROW_REASONS+[GAPI.FILE_NOT_FOUND, GAPI.FORBIDDEN, GAPI.INTERNAL_ERROR,
+                                                              GAPI.BAD_REQUEST, GAPI.REVISION_NOT_FOUND, GAPI.REVISION_DELETION_NOT_SUPPORTED],
+                 fileId=fileId, revisionId=revisionId)
+        entityActionPerformed([Ent.USER, user, entityType, fileName, Ent.DRIVE_FILE_REVISION, revisionId], j, jcount)
+      except (GAPI.fileNotFound, GAPI.forbidden, GAPI.internalError, GAPI.badRequest, GAPI.revisionDeletionNotSupported) as e:
+        entityActionFailedWarning([Ent.USER, user, entityType, fileName], str(e), j, jcount)
+      except GAPI.revisionNotFound:
+        entityDoesNotHaveItemWarning([Ent.USER, user, entityType, fileName, Ent.DRIVE_FILE_REVISION, revisionId], j, jcount)
+      except (GAPI.serviceNotAvailable, GAPI.authError, GAPI.domainPolicy) as e:
+        userSvcNotApplicableOrDriveDisabled(user, str(e), i, count)
+        break
+    Ind.Decrement()
+
+def _showRevision(revision, timeObjects):
+  printEntity([Ent.DRIVE_FILE_REVISION, revision[u'id']])
+  Ind.Increment()
+  if not GC.Values[GC.DRIVE_V3_NATIVE_NAMES]:
+    _mapDriveRevisionNames(revision)
+  showJSON(None, revision, [u'id',], timeObjects)
+  Ind.Decrement()
+
+# gam <UserTypeEntity> info filerevision <DriveFileEntity> <DriveFileRevisionId> [showtitles]
+def infoDriveFileRevisions(users):
+  fileIdEntity = getDriveFileEntity()
+  body, parameters = initializeDriveFileAttributes()
+  revisionId = getString(Cmd.OB_DRIVE_FILE_REVISION_ID)
+  showTitles = True if checkArgumentPresent(Cmd.SHOWTITLES_ARGUMENT) else False
+  checkForExtraneousArguments()
+  timeObjects = DRIVEFILE_FIELDS_TIME_OBJECTS[:]
+  if not GC.Values[GC.DRIVE_V3_NATIVE_NAMES]:
+    _mapDrive3TitlesToDrive2(timeObjects, API.DRIVE3_TO_DRIVE2_REVISIONS_FIELDS_MAP)
+  i, count, users = getEntityArgument(users)
+  for user in users:
+    i += 1
+    user, drive, jcount = _validateUserGetFileIDs(user, i, count, fileIdEntity, body, parameters, entityType=Ent.DRIVE_FILE_REVISION)
+    if jcount == 0:
+      continue
+    Ind.Increment()
+    j = 0
+    for fileId in fileIdEntity[u'list']:
+      j += 1
+      try:
+        fileName = fileId
+        entityType = Ent.DRIVE_FILE_OR_FOLDER_ID
+        if showTitles:
+          fileName, entityType = _getDriveFileNameFromId(drive, fileId)
+        revision = callGAPI(drive.revisions(), u'get',
+                            throw_reasons=GAPI.DRIVE_USER_THROW_REASONS+[GAPI.FILE_NOT_FOUND, GAPI.FORBIDDEN, GAPI.INTERNAL_ERROR,
+                                                                         GAPI.BAD_REQUEST, GAPI.REVISION_NOT_FOUND],
+                            fileId=fileId, revisionId=revisionId, fields=u'*')
+        printEntity([entityType, fileName], j, jcount)
+        Ind.Increment()
+        _showRevision(revision, timeObjects)
+        Ind.Decrement()
+      except (GAPI.fileNotFound, GAPI.forbidden, GAPI.internalError, GAPI.badRequest) as e:
+        entityActionFailedWarning([Ent.USER, user, entityType, fileName], str(e), j, jcount)
+      except GAPI.revisionNotFound:
+        entityDoesNotHaveItemWarning([Ent.USER, user, entityType, fileName, Ent.DRIVE_FILE_REVISION, revisionId], j, jcount)
+      except (GAPI.serviceNotAvailable, GAPI.authError, GAPI.domainPolicy) as e:
+        userSvcNotApplicableOrDriveDisabled(user, str(e), i, count)
+        break
+    Ind.Decrement()
+
+def _printShowDriveFileRevisions(users, csvFormat):
+  if csvFormat:
+    todrive = {}
+    titles, csvRows = initializeTitlesCSVfile([u'Owner', u'id'])
+  fileIdEntity = getDriveFileEntity()
+  body, parameters = initializeDriveFileAttributes()
+  showTitles = False
+  fileNameTitle = [u'name', u'title'][not GC.Values[GC.DRIVE_V3_NATIVE_NAMES]]
+  while Cmd.ArgumentsRemaining():
+    myarg = getArgument()
+    if csvFormat and myarg == u'todrive':
+      todrive = getTodriveParameters()
+    elif myarg == u'showtitles':
+      showTitles = True
+      if csvFormat:
+        addTitlesToCSVfile([fileNameTitle], titles)
+    else:
+      unknownArgumentExit()
   timeObjects = DRIVEFILE_FIELDS_TIME_OBJECTS[:]
   if not GC.Values[GC.DRIVE_V3_NATIVE_NAMES]:
     _mapDrive3TitlesToDrive2(timeObjects, API.DRIVE3_TO_DRIVE2_REVISIONS_FIELDS_MAP)
@@ -18698,25 +18797,44 @@ def showDriveFileRevisions(users):
     for fileId in fileIdEntity[u'list']:
       j += 1
       try:
-        result = callGAPI(drive.revisions(), u'list',
-                          throw_reasons=GAPI.DRIVE_USER_THROW_REASONS+GAPI.DRIVE_ACCESS_THROW_REASONS+[GAPI.BAD_REQUEST],
-                          fileId=fileId, fields=u'revisions')
-        printEntity([Ent.DRIVE_FILE_ID, fileId], j, jcount)
-        Ind.Increment()
-        for revision in result[u'revisions']:
-          printEntity([Ent.REVISION_ID, revision[u'id']])
+        fileName = fileId
+        entityType = Ent.DRIVE_FILE_OR_FOLDER_ID
+        if showTitles:
+          fileName, entityType = _getDriveFileNameFromId(drive, fileId, not csvFormat)
+        results = callGAPIpages(drive.revisions(), u'list', u'revisions',
+                                throw_reasons=GAPI.DRIVE_USER_THROW_REASONS+GAPI.DRIVE_ACCESS_THROW_REASONS+[GAPI.BAD_REQUEST],
+                                fileId=fileId, fields=u'nextPageToken,revisions')
+        if not csvFormat:
+          printEntity([entityType, fileName], j, jcount)
           Ind.Increment()
-          if not GC.Values[GC.DRIVE_V3_NATIVE_NAMES]:
-            _mapDriveRevisionNames(revision)
-          showJSON(None, revision, [u'id',], timeObjects)
+          for revision in results:
+            _showRevision(revision, timeObjects)
           Ind.Decrement()
-        Ind.Decrement()
+        elif results:
+          if not GC.Values[GC.DRIVE_V3_NATIVE_NAMES]:
+            for revision in results:
+              _mapDriveRevisionNames(revision)
+          if showTitles:
+            addRowTitlesToCSVfile(flattenJSON({u'revisions': results}, flattened={u'Owner': user, u'id': fileId, fileNameTitle: fileName}, timeObjects=timeObjects), csvRows, titles)
+          else:
+            addRowTitlesToCSVfile(flattenJSON({u'revisions': results}, flattened={u'Owner': user, u'id': fileId}, timeObjects=timeObjects), csvRows, titles)
       except (GAPI.fileNotFound, GAPI.forbidden, GAPI.internalError, GAPI.insufficientFilePermissions, GAPI.badRequest) as e:
         entityActionFailedWarning([Ent.USER, user, Ent.DRIVE_FILE_OR_FOLDER_ID, fileId], str(e), j, jcount)
       except (GAPI.serviceNotAvailable, GAPI.authError, GAPI.domainPolicy) as e:
         userSvcNotApplicableOrDriveDisabled(user, str(e), i, count)
         break
     Ind.Decrement()
+  if csvFormat:
+    sortCSVTitles([u'Owner', u'id', fileNameTitle], titles)
+    writeCSVfile(csvRows, titles, u'Drive File Revisions', todrive)
+
+# gam <UserTypeEntity> print filerevisions <DriveFileEntity> [todrive [<ToDriveAttributes>]]
+def printDriveFileRevisions(users):
+  _printShowDriveFileRevisions(users, True)
+
+# gam <UserTypeEntity> show filerevisions <DriveFileEntity>
+def showDriveFileRevisions(users):
+  _printShowDriveFileRevisions(users, False)
 
 def _stripMeInOwners(query):
   if not query:
@@ -25606,6 +25724,7 @@ USER_COMMANDS_WITH_OBJECTS = {
         Cmd.ARG_DRIVEFILEACLS:	deleteDriveFileACLs,
         Cmd.ARG_EMPTYDRIVEFOLDERS:	deleteEmptyDriveFolders,
         Cmd.ARG_EVENTS:		deleteCalendarEvents,
+        Cmd.ARG_FILEREVISIONS:	deleteDriveFileRevisions,
         Cmd.ARG_FILTERS:	deleteFilters,
         Cmd.ARG_FORWARDINGADDRESSES:	deleteForwardingAddresses,
         Cmd.ARG_GROUPS:		deleteUserFromGroups,
@@ -25635,6 +25754,7 @@ USER_COMMANDS_WITH_OBJECTS = {
         Cmd.ARG_DELEGATES:	Cmd.ARG_DELEGATE,
         Cmd.ARG_DRIVEFILEACL:	Cmd.ARG_DRIVEFILEACLS,
         Cmd.ARG_EVENT:		Cmd.ARG_EVENTS,
+        Cmd.ARG_FILEREVISION:	Cmd.ARG_FILEREVISIONS,
         Cmd.ARG_FILTER:		Cmd.ARG_FILTERS,
         Cmd.ARG_GROUP:		Cmd.ARG_GROUPS,
         Cmd.ARG_LICENCE:	Cmd.ARG_LICENSE,
@@ -25675,6 +25795,7 @@ USER_COMMANDS_WITH_OBJECTS = {
         Cmd.ARG_CONTACTS:	infoUserContacts,
         Cmd.ARG_CONTACT_GROUPS:	infoUserContactGroups,
         Cmd.ARG_EVENTS:		infoCalendarEvents,
+        Cmd.ARG_FILEREVISIONS:	infoDriveFileRevisions,
         Cmd.ARG_FILTERS:	infoFilters,
         Cmd.ARG_FORWARDINGADDRESSES:	infoForwardingAddresses,
         Cmd.ARG_SENDAS:		infoSendAs,
@@ -25689,6 +25810,7 @@ USER_COMMANDS_WITH_OBJECTS = {
         Cmd.ARG_CONTACT:	Cmd.ARG_CONTACTS,
         Cmd.ARG_CONTACT_GROUP:	Cmd.ARG_CONTACT_GROUPS,
         Cmd.ARG_EVENT:		Cmd.ARG_EVENTS,
+        Cmd.ARG_FILEREVISION:	Cmd.ARG_FILEREVISIONS,
         Cmd.ARG_FILTER:		Cmd.ARG_FILTERS,
         Cmd.ARG_FORWARDINGADDRESS:	Cmd.ARG_FORWARDINGADDRESSES,
         Cmd.ARG_SITE:		Cmd.ARG_SITES,
@@ -25741,6 +25863,7 @@ USER_COMMANDS_WITH_OBJECTS = {
         Cmd.ARG_EVENTS:		printCalendarEvents,
         Cmd.ARG_FILEINFO:	showDriveFileInfo,
         Cmd.ARG_FILELIST:	printDriveFileList,
+        Cmd.ARG_FILEREVISIONS:	printDriveFileRevisions,
         Cmd.ARG_FILTERS:	printFilters,
         Cmd.ARG_FORWARD:	printForward,
         Cmd.ARG_FORWARDINGADDRESSES:	printForwardingAddresses,
@@ -25765,6 +25888,7 @@ USER_COMMANDS_WITH_OBJECTS = {
         Cmd.ARG_DELEGATE:	Cmd.ARG_DELEGATES,
         Cmd.ARG_DRIVEFILEACL:	Cmd.ARG_DRIVEFILEACLS,
         Cmd.ARG_EVENT:		Cmd.ARG_EVENTS,
+        Cmd.ARG_FILEREVISION:	Cmd.ARG_FILEREVISIONS,
         Cmd.ARG_FILTER:		Cmd.ARG_FILTERS,
         Cmd.ARG_FORWARDINGADDRESS:	Cmd.ARG_FORWARDINGADDRESSES,
         Cmd.ARG_MESSAGE:	Cmd.ARG_MESSAGES,
@@ -25841,6 +25965,7 @@ USER_COMMANDS_WITH_OBJECTS = {
         Cmd.ARG_DELEGATE:	Cmd.ARG_DELEGATES,
         Cmd.ARG_DRIVEFILEACL:	Cmd.ARG_DRIVEFILEACLS,
         Cmd.ARG_EVENT:		Cmd.ARG_EVENTS,
+        Cmd.ARG_FILEREVISION:	Cmd.ARG_FILEREVISIONS,
         Cmd.ARG_FILTER:		Cmd.ARG_FILTERS,
         Cmd.ARG_FORWARDINGADDRESS:	Cmd.ARG_FORWARDINGADDRESSES,
         Cmd.ARG_IMAP4:		Cmd.ARG_IMAP,
