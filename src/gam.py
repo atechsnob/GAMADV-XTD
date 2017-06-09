@@ -23,7 +23,7 @@ For more information, see https://github.com/taers232c/GAMADV-XTD
 """
 
 __author__ = u'Ross Scroggs <ross.scroggs@gmail.com>'
-__version__ = u'4.50.05'
+__version__ = u'4.50.06'
 __license__ = u'Apache License 2.0 (http://www.apache.org/licenses/LICENSE-2.0)'
 
 import sys
@@ -457,9 +457,6 @@ def formatKeyValueList(prefixStr, kvList, suffixStr):
   return msg.encode(GM.Globals[GM.SYS_ENCODING], 'replace')
 
 # Error exits
-def formatExceptionMessage(e, message=u''):
-  return convertUTF8(u'{0}{1}'.format(e, message))
-
 def setSysExitRC(sysRC):
   GM.Globals[GM.SYSEXITRC] = sysRC
 
@@ -2528,7 +2525,7 @@ def callGData(service, function,
         waitOnFailure(n, retries, SOCKET_ERROR_RC, str(e))
         continue
       if soft_errors:
-        stderrErrorMsg(formatExceptionMessage(str(e), u': Giving up.'))
+        writeStderr(convertUTF8(u'\n{0}{1} - Giving up.\n'.format(ERROR_PREFIX, str(e))))
         return None
       systemErrorExit(SOCKET_ERROR_RC, str(e))
 
@@ -2691,7 +2688,7 @@ def callGAPI(service, function,
         waitOnFailure(n, retries, SOCKET_ERROR_RC, str(e))
         continue
       if soft_errors:
-        stderrErrorMsg(formatExceptionMessage(str(e), u': Giving up.'))
+        writeStderr(convertUTF8(u'\n{0}{1} - Giving up.\n'.format(ERROR_PREFIX, str(e))))
         return None
       systemErrorExit(SOCKET_ERROR_RC, str(e))
     except ValueError as e:
@@ -3212,14 +3209,16 @@ def getUsersToModify(entityType, entity, memberRole=None, checkNotSuspended=Fals
         ou = makeOrgUnitPathAbsolute(ou)
         if ou.startswith(u'id:'):
           result = callGAPI(cd.orgunits(), u'get',
-                            throw_reasons=[GAPI.BAD_REQUEST, GAPI.INVALID_ORGUNIT, GAPI.ORGUNIT_NOT_FOUND, GAPI.BACKEND_ERROR, GAPI.INVALID_CUSTOMER_ID, GAPI.LOGIN_REQUIRED],
+                            throw_reasons=[GAPI.BAD_REQUEST, GAPI.INVALID_ORGUNIT, GAPI.ORGUNIT_NOT_FOUND, GAPI.BACKEND_ERROR,
+                                           GAPI.INVALID_CUSTOMER_ID, GAPI.LOGIN_REQUIRED],
                             customerId=GC.Values[GC.CUSTOMER_ID], orgUnitPath=ou)
           ou = result[u'orgUnitPath']
         printGettingAllEntityItemsForWhom(Ent.USER, ou, entityType=Ent.ORGANIZATIONAL_UNIT)
         page_message = getPageMessageForWhom(noNL=True)
         result = callGAPIpages(cd.users(), u'list', u'users',
                                page_message=page_message,
-                               throw_reasons=[GAPI.INVALID_ORGUNIT, GAPI.ORGUNIT_NOT_FOUND, GAPI.BACKEND_ERROR, GAPI.BAD_REQUEST, GAPI.INVALID_INPUT, GAPI.RESOURCE_NOT_FOUND, GAPI.FORBIDDEN],
+                               throw_reasons=[GAPI.INVALID_ORGUNIT, GAPI.ORGUNIT_NOT_FOUND,
+                                              GAPI.INVALID_INPUT, GAPI.BAD_REQUEST, GAPI.RESOURCE_NOT_FOUND, GAPI.FORBIDDEN],
                                customer=GC.Values[GC.CUSTOMER_ID], query=orgUnitPathQuery(ou),
                                fields=u'nextPageToken,users(primaryEmail,suspended,orgUnitPath)',
                                maxResults=GC.Values[GC.USER_MAX_RESULTS])
@@ -3237,7 +3236,8 @@ def getUsersToModify(entityType, entity, memberRole=None, checkNotSuspended=Fals
         totalLen = len(entityList)
         printGettingEntityItemsDoneInfo(totalLen-prevLen, qualifier=qualifier)
         prevLen = totalLen
-      except (GAPI.badRequest, GAPI.invalidInput, GAPI.invalidOrgunit, GAPI.orgunitNotFound, GAPI.backendError, GAPI.invalidCustomerId, GAPI.loginRequired, GAPI.resourceNotFound, GAPI.forbidden):
+      except (GAPI.badRequest, GAPI.invalidInput, GAPI.invalidOrgunit, GAPI.orgunitNotFound, GAPI.backendError,
+              GAPI.invalidCustomerId, GAPI.loginRequired, GAPI.resourceNotFound, GAPI.forbidden):
         checkEntityDNEorAccessErrorExit(cd, Ent.ORGANIZATIONAL_UNIT, ou)
         doNotExist += 1
   elif entityType == Cmd.ENTITY_QUERY:
@@ -15058,7 +15058,8 @@ def doPrintUsers(entityList=None):
     try:
       feed = callGAPIpages(cd.users(), u'list', u'users',
                            page_message=page_message, message_attribute=u'primaryEmail',
-                           throw_reasons=[GAPI.DOMAIN_NOT_FOUND, GAPI.INVALID_INPUT, GAPI.BAD_REQUEST, GAPI.RESOURCE_NOT_FOUND, GAPI.FORBIDDEN],
+                           throw_reasons=[GAPI.DOMAIN_NOT_FOUND, GAPI.INVALID_ORGUNIT, GAPI.INVALID_INPUT,
+                                          GAPI.BAD_REQUEST, GAPI.RESOURCE_NOT_FOUND, GAPI.FORBIDDEN],
                            customer=customer, domain=domain, fields=fields, query=query,
                            showDeleted=deleted_only, orderBy=orderBy, sortOrder=sortOrder, viewType=viewType,
                            projection=projection, customFieldMask=customFieldMask, maxResults=GC.Values[GC.USER_MAX_RESULTS])
@@ -15067,7 +15068,7 @@ def doPrintUsers(entityList=None):
     except GAPI.domainNotFound:
       entityActionFailedWarning([Ent.USER, None, Ent.DOMAIN, domain], Msg.NOT_FOUND)
       return
-    except GAPI.invalidInput as e:
+    except (GAPI.invalidOrgunit, GAPI.invalidInput) as e:
       if query and not customFieldMask:
         entityActionFailedWarning([Ent.USER, None], invalidQuery(query))
       elif customFieldMask and not query:
@@ -26618,7 +26619,7 @@ def ProcessGAMCommand(args, processGamCfg=True):
     setSysExitRC(KEYBOARD_INTERRUPT_RC)
     adjustRedirectedSTDFilesIfNotMultiprocessing()
   except socket.error as e:
-    printErrorMessage(SOCKET_ERROR_RC, formatExceptionMessage(str(e)))
+    printErrorMessage(SOCKET_ERROR_RC, str(e))
     adjustRedirectedSTDFilesIfNotMultiprocessing()
   except MemoryError:
     printErrorMessage(MEMORY_ERROR_RC, Msg.GAM_OUT_OF_MEMORY)
