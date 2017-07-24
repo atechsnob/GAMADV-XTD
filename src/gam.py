@@ -23,7 +23,7 @@ For more information, see https://github.com/taers232c/GAMADV-XTD
 """
 
 __author__ = u'Ross Scroggs <ross.scroggs@gmail.com>'
-__version__ = u'4.51.07'
+__version__ = u'4.51.08'
 __license__ = u'Apache License 2.0 (http://www.apache.org/licenses/LICENSE-2.0)'
 
 import sys
@@ -2541,6 +2541,8 @@ def callGData(service, function,
         writeStderr(convertUTF8(u'\n{0}{1} - Giving up.\n'.format(ERROR_PREFIX, str(e))))
         return None
       systemErrorExit(SOCKET_ERROR_RC, str(e))
+    except httplib2.ServerNotFoundError as e:
+      systemErrorExit(NETWORK_ERROR_RC, str(e))
 
 def callGDataPages(service, function,
                    page_message=None,
@@ -2711,6 +2713,8 @@ def callGAPI(service, function,
       systemErrorExit(GOOGLE_API_ERROR_RC, str(e))
     except TypeError as e:
       systemErrorExit(GOOGLE_API_ERROR_RC, str(e))
+    except httplib2.ServerNotFoundError as e:
+      systemErrorExit(NETWORK_ERROR_RC, str(e))
 
 def _processGAPIpagesResult(results, items, allResults, totalItems, page_message, message_attribute, entityType):
   if results:
