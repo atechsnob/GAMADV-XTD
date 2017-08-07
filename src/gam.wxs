@@ -30,7 +30,7 @@
 
   <Fragment>
     <Directory Id="TARGETDIR" Name="SourceDir">
-      <Directory Id="ROOTDRIVE">
+      <Directory Id="ROOT_DRIVE" Name="ROOTDRIVE">
           <Directory Id="INSTALLFOLDER" Name="GAMADV-XTD" />
         </Directory>
     </Directory>
@@ -70,7 +70,7 @@
       <Component Id="GamDataSelection_txt" Guid="0ae70bac-246c-441a-b585-ac1fd723a016">
         <File Name="GamDataSelection.txt" KeyPath="yes" />
       </Component>
-      <Component Id="GamSitess_txt" Guid="0657155a-d743-405f-9d42-a38c00cca6cf">
+      <Component Id="GamSites_txt" Guid="0657155a-d743-405f-9d42-a38c00cca6cf">
         <File Name="GamSites.txt" KeyPath="yes" />
       </Component>
       <Component Id="GamUpdate_txt" Guid="1ca32c9e-5a0c-4d0f-a09d-11a460864843">
