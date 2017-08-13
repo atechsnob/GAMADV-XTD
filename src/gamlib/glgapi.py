@@ -31,6 +31,8 @@ CANNOT_CHANGE_OWNER_ACL = u'cannotChangeOwnerAcl'
 CANNOT_DELETE_ONLY_REVISION = u'cannotDeleteOnlyRevision'
 CANNOT_DELETE_PRIMARY_CALENDAR = u'cannotDeletePrimaryCalendar'
 CANNOT_DELETE_PRIMARY_SENDAS = u'cannotDeletePrimarySendAs'
+CANNOT_SHARE_GROUPS_WITHLINK = u'cannotShareGroupsWithLink'
+CANNOT_SHARE_USERS_WITHLINK = u'cannotShareUsersWithLink'
 CONDITION_NOT_MET = u'conditionNotMet'
 CUSTOMER_NOT_FOUND = u'customerNotFound'
 CYCLIC_MEMBERSHIPS_NOT_ALLOWED = u'cyclicMembershipsNotAllowed'
@@ -43,6 +45,7 @@ DOMAIN_NOT_VERIFIED_SECONDARY = u'domainNotVerifiedSecondary'
 DOMAIN_POLICY = u'domainPolicy'
 DUPLICATE = u'duplicate'
 FAILED_PRECONDITION = u'failedPrecondition'
+FIELD_NOT_WRITABLE = u'fieldNotWritable'
 FILE_NEVER_WRITABLE = u'fileNeverWritable'
 FILE_NOT_FOUND = u'fileNotFound'
 FORBIDDEN = u'forbidden'
@@ -199,6 +202,10 @@ class cannotDeletePrimaryCalendar(Exception):
   pass
 class cannotDeletePrimarySendAs(Exception):
   pass
+class cannotShareGroupsWithLink(Exception):
+  pass
+class cannotShareUsersWithLink(Exception):
+  pass
 class conditionNotMet(Exception):
   pass
 class customerNotFound(Exception):
@@ -222,6 +229,8 @@ class domainPolicy(Exception):
 class duplicate(Exception):
   pass
 class failedPrecondition(Exception):
+  pass
+class fieldNotWritable(Exception):
   pass
 class fileNeverWritable(Exception):
   pass
@@ -337,6 +346,8 @@ REASON_EXCEPTION_MAP = {
   CANNOT_DELETE_ONLY_REVISION: cannotDeleteOnlyRevision,
   CANNOT_DELETE_PRIMARY_CALENDAR: cannotDeletePrimaryCalendar,
   CANNOT_DELETE_PRIMARY_SENDAS: cannotDeletePrimarySendAs,
+  CANNOT_SHARE_GROUPS_WITHLINK: cannotShareGroupsWithLink,
+  CANNOT_SHARE_USERS_WITHLINK: cannotShareUsersWithLink,
   CONDITION_NOT_MET: conditionNotMet,
   CUSTOMER_NOT_FOUND: customerNotFound,
   CYCLIC_MEMBERSHIPS_NOT_ALLOWED: cyclicMembershipsNotAllowed,
@@ -349,6 +360,7 @@ REASON_EXCEPTION_MAP = {
   DOMAIN_POLICY: domainPolicy,
   DUPLICATE: duplicate,
   FAILED_PRECONDITION: failedPrecondition,
+  FIELD_NOT_WRITABLE: fieldNotWritable,
   FILE_NEVER_WRITABLE: fileNeverWritable,
   FILE_NOT_FOUND: fileNotFound,
   FORBIDDEN: forbidden,
