@@ -23,7 +23,7 @@ For more information, see https://github.com/taers232c/GAMADV-XTD
 """
 
 __author__ = u'Ross Scroggs <ross.scroggs@gmail.com>'
-__version__ = u'4.53.22'
+__version__ = u'4.53.23'
 __license__ = u'Apache License 2.0 (http://www.apache.org/licenses/LICENSE-2.0)'
 
 import sys
@@ -22013,7 +22013,6 @@ def validateUserGetPermissionId(user, i=0, count=0):
 # gam <UserTypeEntity> transfer ownership <DriveFileEntity> <UserItem> [includetrashed] (orderby <DriveFileOrderByFieldName> [ascending|descending])*
 #	[preview] [filepath] [buildtree] [todrive [<ToDriveAttributes>]]
 def transferOwnership(users):
-
   def _identifyFilesToTransfer(fileEntry):
     for childFileId in fileEntry[u'children']:
       if childFileId in filesTransferred:
@@ -22134,7 +22133,7 @@ def transferOwnership(users):
       if not buildTree and filepath:
         fileTree[fileId] = {u'info': fileEntryInfo}
       if trashed or not fileEntryInfo[u'trashed']:
-        if fileEntryInfo[u'ownedByMe']:
+        if fileEntryInfo[u'ownedByMe'] and fileEntryInfo[u'name'] != u'My Drive':
           filesToTransfer[fileId] = {u'name': fileEntryInfo[u'name'], u'type': entityType}
         if fileEntryInfo[u'mimeType'] == MIMETYPE_GA_FOLDER:
           if buildTree:
@@ -22161,14 +22160,14 @@ def transferOwnership(users):
         fileDesc = u'{0} ({1})'.format(filesToTransfer[xferFileId][u'name'], xferFileId)
         try:
           callGAPI(drive.permissions(), u'update',
-                   throw_reasons=GAPI.DRIVE_USER_THROW_REASONS+[GAPI.FILE_NOT_FOUND, GAPI.PERMISSION_NOT_FOUND],
+                   throw_reasons=GAPI.DRIVE_USER_THROW_REASONS+[GAPI.FILE_NOT_FOUND, GAPI.PERMISSION_NOT_FOUND, GAPI.FORBIDDEN],
                    fileId=xferFileId, permissionId=permissionId, transferOwnership=True, body=body, fields=u'')
           entityModifierNewValueItemValueListActionPerformed([Ent.USER, user, entityType, fileDesc], Act.MODIFIER_TO, None, [Ent.USER, newOwner], k, kcount)
         except GAPI.permissionNotFound:
           # this might happen if target user isn't explicitly in ACL (i.e. shared with anyone)
           try:
             callGAPI(drive.permissions(), u'create',
-                     throw_reasons=GAPI.DRIVE_USER_THROW_REASONS+[GAPI.INVALID_SHARING_REQUEST, GAPI.FILE_NOT_FOUND],
+                     throw_reasons=GAPI.DRIVE_USER_THROW_REASONS+[GAPI.INVALID_SHARING_REQUEST, GAPI.FILE_NOT_FOUND, GAPI.FORBIDDEN],
                      fileId=xferFileId, sendNotificationEmail=False, body=bodyAdd, fields=u'')
             callGAPI(drive.permissions(), u'update',
                      throw_reasons=GAPI.DRIVE_USER_THROW_REASONS+[GAPI.FILE_NOT_FOUND, GAPI.PERMISSION_NOT_FOUND],
@@ -22180,10 +22179,14 @@ def transferOwnership(users):
             entityDoesNotHaveItemWarning([Ent.USER, user, entityType, fileDesc, Ent.PERMISSION_ID, permissionId], k, kcount)
           except GAPI.fileNotFound:
             entityActionFailedWarning([Ent.USER, user, entityType, fileDesc], Msg.DOES_NOT_EXIST, k, kcount)
+          except GAPI.forbidden as e:
+            entityActionFailedWarning([Ent.USER, user, entityType, fileDesc], str(e), k, kcount)
           except (GAPI.serviceNotAvailable, GAPI.authError, GAPI.domainPolicy) as e:
             userSvcNotApplicableOrDriveDisabled(user, str(e), i, count)
         except GAPI.fileNotFound:
-          entityActionFailedWarning([Ent.USER, user, entityType, fileDesc], Msg.DOES_NOT_EXIST, j, jcount)
+          entityActionFailedWarning([Ent.USER, user, entityType, fileDesc], Msg.DOES_NOT_EXIST, k, kcount)
+        except GAPI.forbidden as e:
+          entityActionFailedWarning([Ent.USER, user, entityType, fileDesc], str(e), k, kcount)
         except (GAPI.serviceNotAvailable, GAPI.authError, GAPI.domainPolicy) as e:
           userSvcNotApplicableOrDriveDisabled(user, str(e), i, count)
           break
@@ -22330,14 +22333,14 @@ def claimOwnership(users):
             fileDesc = u'{0} ({1})'.format(fileInfo[u'name'], fileId)
             try:
               callGAPI(source_drive.permissions(), u'update',
-                       throw_reasons=GAPI.DRIVE_USER_THROW_REASONS+[GAPI.FILE_NOT_FOUND, GAPI.PERMISSION_NOT_FOUND],
+                       throw_reasons=GAPI.DRIVE_USER_THROW_REASONS+[GAPI.FILE_NOT_FOUND, GAPI.PERMISSION_NOT_FOUND, GAPI.FORBIDDEN],
                        fileId=fileId, permissionId=permissionId, transferOwnership=True, body=body, fields=u'')
               entityModifierNewValueItemValueListActionPerformed([Ent.USER, user, entityType, fileDesc], Act.MODIFIER_FROM, None, [Ent.USER, oldOwner], l, lcount)
             except GAPI.permissionNotFound:
               # if claimer not in ACL (file might be visible for all with link)
               try:
                 callGAPI(source_drive.permissions(), u'create',
-                         throw_reasons=GAPI.DRIVE_USER_THROW_REASONS+[GAPI.INVALID_SHARING_REQUEST, GAPI.FILE_NOT_FOUND],
+                         throw_reasons=GAPI.DRIVE_USER_THROW_REASONS+[GAPI.INVALID_SHARING_REQUEST, GAPI.FILE_NOT_FOUND, GAPI.FORBIDDEN],
                          fileId=fileId, sendNotificationEmail=False, body=bodyAdd, fields=u'')
                 callGAPI(source_drive.permissions(), u'update',
                          throw_reasons=GAPI.DRIVE_USER_THROW_REASONS+[GAPI.FILE_NOT_FOUND, GAPI.PERMISSION_NOT_FOUND],
@@ -22349,10 +22352,14 @@ def claimOwnership(users):
                 entityDoesNotHaveItemWarning([Ent.USER, user, entityType, fileDesc, Ent.PERMISSION_ID, permissionId], l, lcount)
               except GAPI.fileNotFound:
                 entityActionFailedWarning([Ent.USER, user, entityType, fileDesc], Msg.DOES_NOT_EXIST, l, lcount)
+              except GAPI.forbidden as e:
+                entityActionFailedWarning([Ent.USER, user, entityType, fileDesc], str(e), l, lcount)
               except (GAPI.serviceNotAvailable, GAPI.authError, GAPI.domainPolicy) as e:
                 userSvcNotApplicableOrDriveDisabled(user, str(e), i, count)
             except GAPI.fileNotFound:
               entityActionFailedWarning([Ent.USER, user, entityType, fileDesc], Msg.DOES_NOT_EXIST, l, lcount)
+            except GAPI.forbidden as e:
+              entityActionFailedWarning([Ent.USER, user, entityType, fileDesc], str(e), l, lcount)
             except (GAPI.serviceNotAvailable, GAPI.authError, GAPI.domainPolicy) as e:
               userSvcNotApplicableOrDriveDisabled(user, str(e), i, count)
               break
