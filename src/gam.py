@@ -23,7 +23,7 @@ For more information, see https://github.com/taers232c/GAMADV-XTD
 """
 
 __author__ = u'Ross Scroggs <ross.scroggs@gmail.com>'
-__version__ = u'4.54.24'
+__version__ = u'4.54.25'
 __license__ = u'Apache License 2.0 (http://www.apache.org/licenses/LICENSE-2.0)'
 
 import sys
@@ -2584,6 +2584,7 @@ def callGData(service, function,
     throw_errors = []
   if retry_errors is None:
     retry_errors = []
+  all_retry_errors = GDATA.NON_TERMINATING_ERRORS+retry_errors
   method = getattr(service, function)
   retries = 10
   for n in range(1, retries+1):
@@ -2591,13 +2592,13 @@ def callGData(service, function,
       return method(**kwargs)
     except gdata.apps.service.AppsForYourDomainException as e:
       error_code, error_message = checkGDataError(e, service)
+      if (n != retries) and (error_code in all_retry_errors):
+        waitOnFailure(n, retries, error_code, error_message)
+        continue
       if error_code in throw_errors:
         if error_code in GDATA.ERROR_CODE_EXCEPTION_MAP:
           raise GDATA.ERROR_CODE_EXCEPTION_MAP[error_code](error_message)
         raise
-      if (n != retries) and (error_code in GDATA.NON_TERMINATING_ERRORS+retry_errors):
-        waitOnFailure(n, retries, error_code, error_message)
-        continue
       if soft_errors:
         stderrErrorMsg(u'{0} - {1}{2}'.format(error_code, error_message, [u'', u': Giving up.'][n > 1]))
         return None
@@ -2742,6 +2743,7 @@ def callGAPI(service, function,
     throw_reasons = []
   if retry_reasons is None:
     retry_reasons = []
+  all_retry_reasons = GAPI.DEFAULT_RETRY_REASONS+retry_reasons
   method = getattr(service, function)
   retries = 10
   svcparms = dict(kwargs.items()+GM.Globals[GM.EXTRA_ARGS_LIST])
@@ -2754,13 +2756,13 @@ def callGAPI(service, function,
         continue
       if http_status == 0:
         return None
+      if (n != retries) and (reason in all_retry_reasons):
+        waitOnFailure(n, retries, reason, message)
+        continue
       if reason in throw_reasons:
         if reason in GAPI.REASON_EXCEPTION_MAP:
           raise GAPI.REASON_EXCEPTION_MAP[reason](message)
         raise e
-      if (n != retries) and (reason in GAPI.DEFAULT_RETRY_REASONS+retry_reasons):
-        waitOnFailure(n, retries, reason, message)
-        continue
       if soft_errors:
         stderrErrorMsg(u'{0}: {1} - {2}{3}'.format(http_status, reason, message, [u'', u': Giving up.'][n > 1]))
         return None
@@ -11734,6 +11736,9 @@ def doPrintGroups():
         response = callGAPI(cd.groups(), u'get',
                             soft_errors=True, throw_reasons=GAPI.GROUP_GET_THROW_REASONS, retry_reasons=GAPI.GROUP_GET_RETRY_REASONS,
                             groupKey=ri[RI_ENTITY], fields=cdfields)
+        if response is None:
+          entityActionFailedWarning([Ent.GROUP, ri[RI_ENTITY], Ent.GROUP, None], Msg.UNRECOVERABLE_ERROR, i, int(ri[RI_COUNT]))
+          return
       except (GAPI.groupNotFound, GAPI.domainNotFound, GAPI.domainCannotUseApis, GAPI.forbidden, GAPI.badRequest):
         entityUnknownWarning(Ent.GROUP, ri[RI_ENTITY], i, int(ri[RI_COUNT]))
         return
@@ -11799,8 +11804,12 @@ def doPrintGroups():
         response = callGAPI(gs.groups(), u'get',
                             soft_errors=True, throw_reasons=GAPI.GROUP_SETTINGS_THROW_REASONS, retry_reasons=GAPI.GROUP_SETTINGS_RETRY_REASONS,
                             groupUniqueId=ri[RI_ENTITY], fields=gsfields)
+        if response is None:
+          entityActionFailedWarning([Ent.GROUP, ri[RI_ENTITY], Ent.GROUP_SETTINGS, None], Msg.UNRECOVERABLE_ERROR, i, int(ri[RI_COUNT]))
+          response = {}
       except (GAPI.groupNotFound, GAPI.domainNotFound, GAPI.domainCannotUseApis, GAPI.forbidden, GAPI.backendError, GAPI.systemError) as e:
         entityActionFailedWarning([Ent.GROUP, ri[RI_ENTITY], Ent.GROUP_SETTINGS, None], str(e), i, int(ri[RI_COUNT]))
+        response = {}
     groupData[i][u'settings'] = response
     _writeRowIfComplete(i)
 
