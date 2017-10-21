@@ -11879,7 +11879,7 @@ def doPrintGroups():
         addTitlesToCSVfile([u'Owners',], titles)
   if formatJSON:
     sortHeaders = False
-    titles, csvRows = initializeTitlesCSVfile([u'JSON',])
+    titles, csvRows = initializeTitlesCSVfile(PRINT_GROUPS_JSON_TITLES)
     if roles:
       addTitleToCSVfile(u'JSON-members', titles)
     if getSettings:
