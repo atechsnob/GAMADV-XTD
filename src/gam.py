@@ -1223,14 +1223,14 @@ def getCharSet():
     return getString(Cmd.OB_CHAR_SET)
   return GC.Values[GC.CHARSET]
 
-def getCharacter(minLen=1, maxLen=1):
+def getCharacter():
   if Cmd.ArgumentsRemaining():
     argstr = Cmd.Current().decode(u'string_escape')
     if argstr:
-      if (len(argstr) >= minLen) and (len(argstr) <= maxLen):
+      if len(argstr) ==1:
         Cmd.Advance()
         return argstr
-      invalidArgumentExit(u'{0} for {1}'.format(integerLimits(minLen, maxLen, Msg.STRING_LENGTH), Cmd.OB_CHARACTER))
+      invalidArgumentExit(u'{0} for {1}'.format(integerLimits(1, 1, Msg.STRING_LENGTH), Cmd.OB_CHARACTER))
     emptyArgumentExit(Cmd.OB_CHARACTER)
   missingArgumentExit(Cmd.OB_CHARACTER)
 
@@ -1955,12 +1955,19 @@ def SetGlobalVariables():
     return False
 
   def _getCfgCharacter(sectionName, itemName):
-    value = _stripStringQuotes(GM.Globals[GM.PARSER].get(sectionName, itemName))
-    value = value.decode(u'string_escape')
-    minLen, maxLen = GC.VAR_INFO[itemName][GC.VAR_LIMITS]
-    if (len(value) >= minLen) and (len(value) <= maxLen):
+    value = _stripStringQuotes(GM.Globals[GM.PARSER].get(sectionName, itemName)).decode(u'string_escape')
+    if len(value) == 1:
       return value
-    _printValueError(sectionName, itemName, u'"{0}"'.format(value), u'{0}: {1}'.format(Msg.EXPECTED, integerLimits(minLen, maxLen, Msg.STRING_LENGTH)))
+    _printValueError(sectionName, itemName, u'"{0}"'.format(value), u'{0}: {1}'.format(Msg.EXPECTED, integerLimits(1, 1, Msg.STRING_LENGTH)))
+    status[u'errors'] = True
+    return u''
+
+  def _getCfgChoice(sectionName, itemName):
+    value = _stripStringQuotes(GM.Globals[GM.PARSER].get(sectionName, itemName))
+    choices = GC.VAR_INFO[itemName][GC.VAR_CHOICES]
+    if value in choices:
+      return choices[value]
+    _printValueError(sectionName, itemName, u'"{0}"'.format(value), u'{0}: {1}'.format(Msg.EXPECTED, u','.join(choices)))
     status[u'errors'] = True
     return u''
 
@@ -2053,8 +2060,11 @@ def SetGlobalVariables():
     for itemName in sorted(GC.VAR_INFO):
       cfgValue = GM.Globals[GM.PARSER].get(sectionName, itemName)
       varType = GC.VAR_INFO[itemName][GC.VAR_TYPE]
-      if itemName == GC.CSV_OUTPUT_LINE_TERMINATOR:
-        cfgValue = repr(str(cfgValue))
+      if varType == GC.TYPE_CHOICE:
+        for choice, value in iteritems(GC.VAR_INFO[itemName][GC.VAR_CHOICES]):
+          if cfgValue == value:
+            cfgValue = choice
+            break
       elif varType not in [GC.TYPE_BOOLEAN, GC.TYPE_INTEGER]:
         cfgValue = _quoteStringIfLeadingTrailingBlanks(cfgValue)
       if varType == GC.TYPE_FILE:
@@ -2203,8 +2213,9 @@ def SetGlobalVariables():
         if varType == GC.TYPE_BOOLEAN:
           value = [FALSE, TRUE][getBoolean()]
         elif varType == GC.TYPE_CHARACTER:
-          minLen, maxLen = GC.VAR_INFO[itemName][GC.VAR_LIMITS]
-          value = getCharacter(minLen, maxLen)
+          value = getCharacter()
+        elif varType == GC.TYPE_CHOICE:
+          value = getChoice(GC.VAR_INFO[itemName][GC.VAR_CHOICES], mapChoice=True)
         elif varType == GC.TYPE_INTEGER:
           minVal, maxVal = GC.VAR_INFO[itemName][GC.VAR_LIMITS]
           value = text_type(getInteger(minVal=minVal, maxVal=maxVal))
@@ -2227,6 +2238,8 @@ def SetGlobalVariables():
       GC.Values[itemName] = _getCfgBoolean(sectionName, itemName)
     elif varType == GC.TYPE_CHARACTER:
       GC.Values[itemName] = _getCfgCharacter(sectionName, itemName)
+    elif varType == GC.TYPE_CHOICE:
+      GC.Values[itemName] = _getCfgChoice(sectionName, itemName)
     elif varType == GC.TYPE_INTEGER:
       GC.Values[itemName] = _getCfgInteger(sectionName, itemName)
     elif varType == GC.TYPE_STRING:
