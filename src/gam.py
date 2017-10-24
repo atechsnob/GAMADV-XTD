@@ -1227,7 +1227,7 @@ def getCharacter():
   if Cmd.ArgumentsRemaining():
     argstr = Cmd.Current().decode(u'string_escape')
     if argstr:
-      if len(argstr) ==1:
+      if len(argstr) == 1:
         Cmd.Advance()
         return argstr
       invalidArgumentExit(u'{0} for {1}'.format(integerLimits(1, 1, Msg.STRING_LENGTH), Cmd.OB_CHARACTER))
