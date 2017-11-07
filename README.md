@@ -1,6 +1,9 @@
 GAMADV-XTD
 ========
 GAMADV-XTD is a free, open source command line tool for Google G Suite Administrators to manage domain and user settings quickly and easily.
+This page provides simple instructions for downloading, installing and starting to use GAM.
+
+GAMADV-XTD requires G Suite for Business, Education, Partner or Government Edition. Google Apps Free Edition has limited API support and not all GAM commands work.
 
 GAMADV-XTD is a rewrite/extension of Jay Lee's [GAM](https://github.com/jay0lee/GAM), without his efforts, this version wouldn't exist.
 
@@ -10,7 +13,7 @@ General GAM documentation is hosted in the [GitHub Wiki]. Documentation specific
 
 Downloads
 ---------
-You can download the current GAMADV-XTD release from the [GitHub Releases] page. Choose one of the following:
+You can download the current GAMADV-XTD release from the [GitHub Releases](https://github.com/taers232c/GAMADV-XTD/releases) page. Choose one of the following:
 
 * Single Executable, Linux/Mac OS - `gamadv-x-4.wx.yz-linux-x86_64.xz, gamadv-x-4.wx.yz-macos.tar.xz`
   - Download the archive, extract the contents into some directory.
@@ -33,10 +36,10 @@ Installation - New Users
 Read GamConfig.txt.
 
 Enter the following gam commands and follow instructions to create the necessary authorizations.
-- Build gam.cfg: ```gam config verify```
-- Build GAM Project for authorization: ```gam create project```
-- Authorize Gam Client: ```gam oauth create```
-- Authorize Service Account: ```gam user <email address> check serviceaccount```
+- Build gam.cfg: `gam config verify`
+- Build GAM Project for authorization: `gam create project`
+- Authorize Gam Client: `gam oauth create`
+- Authorize Service Account: `gam user <EmailAddress> check serviceaccount`
 
 Installation - Upgrading from a GAM version other than a prior version of GAMADV-XTD or GAMADV-X
 ------------------------------------------------------------------------------------------------
