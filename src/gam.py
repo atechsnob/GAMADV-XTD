@@ -22,7 +22,7 @@ For more information, see https://github.com/taers232c/GAMADV-XTD
 """
 
 __author__ = u'Ross Scroggs <ross.scroggs@gmail.com>'
-__version__ = u'4.54.49'
+__version__ = u'4.54.50'
 __license__ = u'Apache License 2.0 (http://www.apache.org/licenses/LICENSE-2.0)'
 
 import sys
@@ -11373,10 +11373,10 @@ def checkGroupExists(cd, group, i=0, count=0):
     entityUnknownWarning(Ent.GROUP, group, i, count)
     return None
 
-UPDATE_GROUP_SUBCMDS = [u'add', u'clear', u'delete', u'remove', u'sync', u'update']
+UPDATE_GROUP_SUBCMDS = [u'add', u'create', u'delete', u'remove', u'clear', u'sync', u'update']
 
 # gam update groups <GroupEntity> [admincreated <Boolean>] [email <EmailAddress>] <GroupAttributes>
-# gam update groups <GroupEntity> add [member|manager|owner] [notsuspended] <UserTypeEntity>
+# gam update groups <GroupEntity> create|add [member|manager|owner] [notsuspended] <UserTypeEntity>
 # gam update groups <GroupEntity> delete|remove [member|manager|owner] <UserTypeEntity>
 # gam update groups <GroupEntity> sync [member|manager|owner] [notsuspended] <UserTypeEntity>
 # gam update groups <GroupEntity> update [member|manager|owner] <UserTypeEntity>
@@ -11628,7 +11628,7 @@ def doUpdateGroups():
           entityUnknownWarning(Ent.GROUP, group, i, count)
           continue
       entityActionPerformedMessage([Ent.GROUP, group], errMsg, i, count)
-  elif CL_subCommand == u'add':
+  elif CL_subCommand in [u'create', u'add']:
     role = getChoice(GROUP_ROLES_MAP, defaultChoice=Ent.ROLE_MEMBER, mapChoice=True)
     checkNotSuspended = True if checkArgumentPresent(Cmd.NOTSUSPENDED_ARGUMENT) else False
     _, addMembers = getEntityToModify(defaultEntityType=Cmd.ENTITY_USERS, checkNotSuspended=checkNotSuspended, groupUserMembersOnly=False)
@@ -13347,7 +13347,7 @@ def doCalendarsInfoACLs(cal, calIds):
   checkForExtraneousArguments()
   _doInfoCalendarACLs(None, None, cal, calIds, len(calIds), ACLScopeEntity)
 
-def doCalendarsPrintShowACLs(cal, calIds, csvFormat):
+def _doCalendarsPrintShowACLs(cal, calIds, csvFormat):
   if csvFormat:
     todrive = {}
     titles, csvRows = initializeTitlesCSVfile(None)
@@ -13367,13 +13367,13 @@ def doCalendarsPrintShowACLs(cal, calIds, csvFormat):
 # gam calendars <CalendarEntity> print acls
 def doCalendarsPrintACLs(cal, calIds):
   checkForExtraneousArguments()
-  doCalendarsPrintShowACLs(cal, calIds, True)
+  _doCalendarsPrintShowACLs(cal, calIds, True)
 
 # gam calendars <CalendarEntity> show acls
 # gam calendar <CalendarItem> showacl
 def doCalendarsShowACLs(cal, calIds):
   checkForExtraneousArguments()
-  doCalendarsPrintShowACLs(cal, calIds, False)
+  _doCalendarsPrintShowACLs(cal, calIds, False)
 
 LIST_EVENTS_DISPLAY_PROPERTIES = {
   u'alwaysincludeemail': (u'alwaysIncludeEmail', {GC.VAR_TYPE: GC.TYPE_BOOLEAN}),
@@ -18251,8 +18251,8 @@ PARTICIPANT_EN_MAP = {
 
 # gam courses <CourseEntity> create|add alias <CourseAliasEntity>
 # gam course <CourseID> create|add alias <CourseAlias>
-# gam courses <CourseEntity> add teachers|students <UserTypeEntity>
-# gam course <CourseID> add teacher|student <EmailAddress>
+# gam courses <CourseEntity> create|add teachers|students <UserTypeEntity>
+# gam course <CourseID> create|add teacher|student <EmailAddress>
 def doCourseAddParticipants(courseIdList, getEntityListArg):
   croom = buildGAPIObject(API.CLASSROOM)
   role = getChoice(ADD_REMOVE_PARTICIPANT_TYPES_MAP, mapChoice=True)
@@ -19637,6 +19637,12 @@ def createCalendar(users):
     except (GAPI.serviceNotAvailable, GAPI.authError):
       entityServiceNotApplicableWarning(Ent.USER, user, i, count)
 
+def addCreateCalendars(users):
+  if Act.Get() == Act.ADD:
+    addCalendars(users)
+  else:
+    createCalendar(users)
+
 def _modifyRemoveCalendars(users, calendarEntity, function, **kwargs):
   i, count, users = getEntityArgument(users)
   for user in users:
@@ -19787,7 +19793,7 @@ def showCalSettings(users):
       entityServiceNotApplicableWarning(Ent.USER, user, i, count)
 
 # gam <UserTypeEntity> create|add calendaracls <CalendarEntity> <CalendarACLRole> <ACLScopeEntity>
-def addCalendarACLs(users):
+def createCalendarACLs(users):
   calendarEntity = getCalendarEntity()
   role = getChoice(CALENDAR_ACL_ROLES_MAP, mapChoice=True)
   ACLScopeEntity = getCalendarSiteACLScopeEntity()
@@ -19951,7 +19957,7 @@ def transferCalendars(users):
           entityUnknownWarning(Ent.CALENDAR, calId, j, jcount)
     Ind.Decrement()
 
-def _insertImportCalendarEvent(users, function):
+def _createImportCalendarEvent(users, function):
   calendarEntity = getCalendarEntity()
   body = {}
   parameters = {u'sendNotifications': None}
@@ -19977,12 +19983,12 @@ def _insertImportCalendarEvent(users, function):
       return
 
 # gam <UserTypeEntity> create|add event <CalendarEntity> [id <String>] <EventAddAttributes>+
-def addCalendarEvent(users):
-  _insertImportCalendarEvent(users, u'insert')
+def createCalendarEvent(users):
+  _createImportCalendarEvent(users, u'insert')
 
 # gam <UserTypeEntity> import event <CalendarEntity> icaluid <iCalUID> <EventImportAttributes>+
 def importCalendarEvent(users):
-  _insertImportCalendarEvent(users, u'import')
+  _createImportCalendarEvent(users, u'import')
 
 # gam <UserTypeEntity> update events <CalendarEntity> <EventEntity> <EventUpdateAttributes>+
 def updateCalendarEvents(users):
@@ -24117,6 +24123,7 @@ def _showDriveFilePermission(permission, printKeys, timeObjects, i=0, count=0):
 
 def _createDriveFileACL(users, useDomainAdminAccess):
   sendNotificationEmail = showTitles = _transferOwnership = False
+  showDetails = True
   emailMessage = None
   fileIdEntity = getDriveFileEntity()
   body = {}
@@ -24151,6 +24158,8 @@ def _createDriveFileACL(users, useDomainAdminAccess):
       emailMessage = getString(Cmd.OB_STRING)
     elif myarg == u'showtitles':
       showTitles = True
+    elif myarg == u'nodetails':
+      showDetails = False
     elif myarg in [u'adminaccess', u'asadmin']:
       useDomainAdminAccess = True
     else:
@@ -24191,7 +24200,8 @@ def _createDriveFileACL(users, useDomainAdminAccess):
                               fileId=fileId, sendNotificationEmail=sendNotificationEmail, emailMessage=emailMessage,
                               transferOwnership=_transferOwnership, body=body, fields=u'*', supportsTeamDrives=True)
         entityActionPerformed([Ent.USER, user, entityType, fileName, Ent.PERMISSION_ID, permissionId], j, jcount)
-        _showDriveFilePermission(permission, printKeys, timeObjects)
+        if showDetails:
+          _showDriveFilePermission(permission, printKeys, timeObjects)
       except (GAPI.fileNotFound, GAPI.forbidden, GAPI.internalError, GAPI.insufficientFilePermissions, GAPI.unknownError,
               GAPI.ownerOnTeamDriveItemNotSupported, GAPI.organizerOnNonTeamDriveItemNotSupported) as e:
         entityActionFailedWarning([Ent.USER, user, entityType, fileName], str(e), j, jcount)
@@ -24203,12 +24213,12 @@ def _createDriveFileACL(users, useDomainAdminAccess):
     Ind.Decrement()
 
 # gam <UserTypeEntity> create|add drivefileacl <DriveFileEntity> [adminaccess|asadmin] anyone|(user <UserItem>)|(group <GroupItem>)|(domain <DomainName>)
-#	(role reader|commenter|writer|owner|editor|organizer) [withlink|(allowfilediscovery|discoverable [<Boolean>])] [expiration <Time>] [sendmail] [emailmessage <String>] [showtitles]
+#	(role reader|commenter|writer|owner|editor|organizer) [withlink|(allowfilediscovery|discoverable [<Boolean>])] [expiration <Time>] [sendmail] [emailmessage <String>] [showtitles] [nodetails]
 def createDriveFileACL(users):
   _createDriveFileACL(users, False)
 
 # gam create|add drivefileacl <DriveFileEntity> anyone|(user <UserItem>)|(group <GroupItem>)|(domain <DomainName>)
-#	(role reader|commenter|writer|owner|editor|organizer) [withlink|(allowfilediscovery|discoverable [<Boolean>])] [expiration <Time>] [sendmail] [emailmessage <String>] [showtitles]
+#	(role reader|commenter|writer|owner|editor|organizer) [withlink|(allowfilediscovery|discoverable [<Boolean>])] [expiration <Time>] [sendmail] [emailmessage <String>] [showtitles] [nodetails]
 def doCreateDriveFileACL():
   _createDriveFileACL([_getValueFromOAuth(u'email')], True)
 
@@ -24216,8 +24226,8 @@ def _updateDriveFileACLs(users, useDomainAdminAccess):
   fileIdEntity = getDriveFileEntity()
   body = {}
   isEmail, permissionId = getPermissionId()
-  removeExpiration = _transferOwnership = False
-  showTitles = False
+  removeExpiration = showTitles = _transferOwnership = False
+  showDetails = True
   while Cmd.ArgumentsRemaining():
     myarg = getArgument()
     if myarg == u'withlink':
@@ -24234,6 +24244,8 @@ def _updateDriveFileACLs(users, useDomainAdminAccess):
       removeExpiration = getBoolean()
     elif myarg == u'showtitles':
       showTitles = True
+    elif myarg == u'nodetails':
+      showDetails = False
     elif myarg == u'transferownership':
       deprecatedArgument(myarg)
       getBoolean()
@@ -24276,7 +24288,8 @@ def _updateDriveFileACLs(users, useDomainAdminAccess):
                               fileId=fileId, permissionId=permissionId, removeExpiration=removeExpiration,
                               transferOwnership=_transferOwnership, body=body, fields=u'*', supportsTeamDrives=True)
         entityActionPerformed([Ent.USER, user, entityType, fileName, Ent.PERMISSION_ID, permissionId], j, jcount)
-        _showDriveFilePermission(permission, printKeys, timeObjects)
+        if showDetails:
+          _showDriveFilePermission(permission, printKeys, timeObjects)
       except (GAPI.fileNotFound, GAPI.forbidden, GAPI.internalError, GAPI.insufficientFilePermissions, GAPI.unknownError,
               GAPI.badRequest, GAPI.invalidOwnershipTransfer,
               GAPI.ownerOnTeamDriveItemNotSupported, GAPI.organizerOnNonTeamDriveItemNotSupported, GAPI.fieldNotWritable) as e:
@@ -24289,12 +24302,12 @@ def _updateDriveFileACLs(users, useDomainAdminAccess):
     Ind.Decrement()
 
 # gam <UserTypeEntity> update drivefileacl <DriveFileEntity> <DriveFilePermissionIDorEmail> [adminaccess|asadmin]
-#	(role reader|commenter|writer|owner|editor|organizer) [withlink|(allowfilediscovery|discoverable [<Boolean>])] [expiration <Time>] [removeexpiration [<Boolean>]] [showtitles]
+#	(role reader|commenter|writer|owner|editor|organizer) [withlink|(allowfilediscovery|discoverable [<Boolean>])] [expiration <Time>] [removeexpiration [<Boolean>]] [showtitles] [nodetails]
 def updateDriveFileACLs(users):
   _updateDriveFileACLs(users, False)
 
 # gam update drivefileacl <DriveFileEntity> <DriveFilePermissionIDorEmail>
-#	(role reader|commenter|writer|owner|editor|organizer) [withlink|(allowfilediscovery|discoverable [<Boolean>])] [expiration <Time>] [removeexpiration [<Boolean>]] [showtitles]
+#	(role reader|commenter|writer|owner|editor|organizer) [withlink|(allowfilediscovery|discoverable [<Boolean>])] [expiration <Time>] [removeexpiration [<Boolean>]] [showtitles] [nodetails]
 def doUpdateDriveFileACLs():
   _updateDriveFileACLs([_getValueFromOAuth(u'email')], True)
 
@@ -29408,6 +29421,7 @@ MAIN_ADD_CREATE_ALIASES = {
   u'class':		Cmd.ARG_COURSE,
   Cmd.ARG_CONTACTS:	Cmd.ARG_CONTACT,
   Cmd.ARG_DOMAIN_ALIASES:	Cmd.ARG_DOMAIN_ALIAS,
+  Cmd.ARG_DRIVEFILEACLS:	Cmd.ARG_DRIVEFILEACL,
   Cmd.ARG_GUARDIANS:	Cmd.ARG_GUARDIAN,
   u'guardianinvite':	Cmd.ARG_GUARDIAN,
   Cmd.ARG_HOLD:		Cmd.ARG_VAULTHOLD,
@@ -29733,9 +29747,7 @@ MAIN_COMMANDS_WITH_OBJECTS = {
        {Cmd.ARG_USER:		doSuspendUser,
         Cmd.ARG_USERS:		doSuspendUsers,
        },
-     CMD_OBJ_ALIASES:
-       {
-       },
+     CMD_OBJ_ALIASES:		{},
     },
   u'update':
     {CMD_ACTION: Act.UPDATE,
@@ -29819,9 +29831,7 @@ MAIN_COMMANDS_WITH_OBJECTS = {
        {Cmd.ARG_USER:		doUnsuspendUser,
         Cmd.ARG_USERS:		doUnsuspendUsers,
        },
-     CMD_OBJ_ALIASES:
-       {
-       },
+     CMD_OBJ_ALIASES:		{},
     },
   }
 
@@ -30040,7 +30050,6 @@ def processCoursesCommands():
 # Printer command sub-commands
 PRINTER_SUBCOMMANDS = {
   u'add':	{CMD_ACTION: Act.ADD, CMD_FUNCTION: doPrinterCreateACL},
-  u'create':	{CMD_ACTION: Act.CREATE, CMD_FUNCTION: doPrinterCreateACL},
   u'delete':	{CMD_ACTION: Act.DELETE, CMD_FUNCTION: doPrinterDeleteACLs},
   u'printacls':	{CMD_ACTION: Act.SHOW, CMD_FUNCTION: doPrinterPrintACLs},
   u'showacls':	{CMD_ACTION: Act.SHOW, CMD_FUNCTION: doPrinterShowACLs},
@@ -30050,6 +30059,7 @@ PRINTER_SUBCOMMANDS = {
 
 # Printer sub-command aliases
 PRINTER_SUBCOMMAND_ALIASES = {
+  u'create':	u'add',
   u'del':	u'delete',
   u'printacl':	u'printacls',
   u'showacl':	u'showacls',
@@ -30212,39 +30222,51 @@ USER_COMMANDS = {
 
 # User commands with objects
 #
+USER_ADD_CREATE_FUNCTIONS = {
+  Cmd.ARG_CALENDARS:	addCreateCalendars,
+  Cmd.ARG_GROUPS:	addUserToGroups,
+  Cmd.ARG_CALENDARACLS:	createCalendarACLs,
+  Cmd.ARG_CONTACT:	createUserContact,
+  Cmd.ARG_CONTACT_GROUP:	createUserContactGroup,
+  Cmd.ARG_DELEGATE:	createDelegate,
+  Cmd.ARG_DRIVEFILE:	createDriveFile,
+  Cmd.ARG_DRIVEFILEACL:	createDriveFileACL,
+  Cmd.ARG_EVENT:	createCalendarEvent,
+  Cmd.ARG_FILTER:	createFilter,
+  Cmd.ARG_FORWARDINGADDRESSES:	createForwardingAddresses,
+  Cmd.ARG_LABEL:	createLabel,
+  Cmd.ARG_LICENSE:	createLicense,
+  Cmd.ARG_PERMISSIONS:	createDriveFilePermissions,
+  Cmd.ARG_SENDAS:	createSendAs,
+  Cmd.ARG_SHEET:	createSheet,
+  Cmd.ARG_SITE:		createUserSite,
+  Cmd.ARG_SITEACLS:	processUserSiteACLs,
+  Cmd.ARG_SMIME:	createSmime,
+  }
+
+USER_ADD_CREATE_ALIASES = {
+  Cmd.ARG_CALENDAR:	Cmd.ARG_CALENDARS,
+  Cmd.ARG_GROUP:	Cmd.ARG_GROUPS,
+  Cmd.ARG_CALENDARACL:	Cmd.ARG_CALENDARACLS,
+  Cmd.ARG_CONTACTS:	Cmd.ARG_CONTACT,
+  Cmd.ARG_CONTACT_GROUPS:	Cmd.ARG_CONTACT_GROUP,
+  Cmd.ARG_DELEGATES:	Cmd.ARG_DELEGATE,
+  Cmd.ARG_DRIVEFILEACLS:	Cmd.ARG_DRIVEFILEACL,
+  Cmd.ARG_EVENTS:	Cmd.ARG_EVENT,
+  Cmd.ARG_FILTERS:	Cmd.ARG_FILTER,
+  Cmd.ARG_FORWARDINGADDRESS:	Cmd.ARG_FORWARDINGADDRESSES,
+  Cmd.ARG_LABELS:	Cmd.ARG_LABEL,
+  Cmd.ARG_LICENCE:	Cmd.ARG_LICENSE,
+  Cmd.ARG_SHEETS:	Cmd.ARG_SHEET,
+  Cmd.ARG_SITES:	Cmd.ARG_SITE,
+  Cmd.ARG_SITEACL:	Cmd.ARG_SITEACLS,
+  }
+
 USER_COMMANDS_WITH_OBJECTS = {
   u'add':
     {CMD_ACTION: Act.ADD,
-     CMD_FUNCTION:
-       {Cmd.ARG_CALENDARS:	addCalendars,
-        Cmd.ARG_CALENDARACLS:	addCalendarACLs,
-        Cmd.ARG_DELEGATE:	createDelegate,
-        Cmd.ARG_DRIVEFILE:	createDriveFile,
-        Cmd.ARG_DRIVEFILEACL:	createDriveFileACL,
-        Cmd.ARG_EVENT:		addCalendarEvent,
-        Cmd.ARG_FILTER:		createFilter,
-        Cmd.ARG_FORWARDINGADDRESSES:	createForwardingAddresses,
-        Cmd.ARG_GROUPS:		addUserToGroups,
-        Cmd.ARG_LABEL:		createLabel,
-        Cmd.ARG_LICENSE:	createLicense,
-        Cmd.ARG_PERMISSIONS:	createDriveFilePermissions,
-        Cmd.ARG_SENDAS:		createSendAs,
-        Cmd.ARG_SMIME:		createSmime,
-        Cmd.ARG_SITEACLS:	processUserSiteACLs,
-        Cmd.ARG_TEAMDRIVE:	createTeamDrive,
-       },
-     CMD_OBJ_ALIASES:
-       {Cmd.ARG_CALENDAR:	Cmd.ARG_CALENDARS,
-        Cmd.ARG_CALENDARACL:	Cmd.ARG_CALENDARACLS,
-        Cmd.ARG_DELEGATES:	Cmd.ARG_DELEGATE,
-        Cmd.ARG_EVENTS:		Cmd.ARG_EVENT,
-        Cmd.ARG_FILTERS:	Cmd.ARG_FILTER,
-        Cmd.ARG_FORWARDINGADDRESS:	Cmd.ARG_FORWARDINGADDRESSES,
-        Cmd.ARG_GROUP:		Cmd.ARG_GROUPS,
-        Cmd.ARG_LABELS:		Cmd.ARG_LABEL,
-        Cmd.ARG_LICENCE:	Cmd.ARG_LICENSE,
-        Cmd.ARG_SITEACL:	Cmd.ARG_SITEACLS,
-       },
+     CMD_FUNCTION:	USER_ADD_CREATE_FUNCTIONS,
+     CMD_OBJ_ALIASES:	USER_ADD_CREATE_ALIASES,
     },
   u'append':
     {CMD_ACTION: Act.APPEND,
@@ -30269,18 +30291,14 @@ USER_COMMANDS_WITH_OBJECTS = {
      CMD_FUNCTION:
        {Cmd.ARG_SERVICEACCOUNT:	checkServiceAccount,
        },
-     CMD_OBJ_ALIASES:
-       {
-       },
+     CMD_OBJ_ALIASES:		{},
     },
   u'claim':
     {CMD_ACTION: Act.CLAIM,
      CMD_FUNCTION:
        {Cmd.ARG_OWNERSHIP: 	claimOwnership,
        },
-     CMD_OBJ_ALIASES:
-       {
-       },
+     CMD_OBJ_ALIASES:		{},
     },
   u'clear':
     {CMD_ACTION: Act.CLEAR,
@@ -30296,53 +30314,19 @@ USER_COMMANDS_WITH_OBJECTS = {
      CMD_FUNCTION:
        {Cmd.ARG_ORPHANS:	collectOrphans,
        },
-     CMD_OBJ_ALIASES:
-       {
-       },
+     CMD_OBJ_ALIASES:		{},
     },
   u'copy':
     {CMD_ACTION: Act.COPY,
      CMD_FUNCTION:
        {Cmd.ARG_DRIVEFILE:	copyDriveFile,
        },
-     CMD_OBJ_ALIASES:
-       {
-       },
+     CMD_OBJ_ALIASES:		{},
     },
   u'create':
     {CMD_ACTION: Act.CREATE,
-     CMD_FUNCTION:
-       {Cmd.ARG_CALENDAR:	createCalendar,
-        Cmd.ARG_CONTACT:	createUserContact,
-        Cmd.ARG_CONTACT_GROUP:	createUserContactGroup,
-        Cmd.ARG_DELEGATE:	createDelegate,
-        Cmd.ARG_DRIVEFILE:	createDriveFile,
-        Cmd.ARG_DRIVEFILEACL:	createDriveFileACL,
-        Cmd.ARG_FILTER:		createFilter,
-        Cmd.ARG_FORWARDINGADDRESSES:	createForwardingAddresses,
-        Cmd.ARG_LABEL:		createLabel,
-        Cmd.ARG_LICENSE:	createLicense,
-        Cmd.ARG_PERMISSIONS:	createDriveFilePermissions,
-        Cmd.ARG_SENDAS:		createSendAs,
-        Cmd.ARG_SHEET:		createSheet,
-        Cmd.ARG_SITE:		createUserSite,
-        Cmd.ARG_SITEACLS:	processUserSiteACLs,
-        Cmd.ARG_SMIME:		createSmime,
-        Cmd.ARG_TEAMDRIVE:	createTeamDrive,
-       },
-     CMD_OBJ_ALIASES:
-       {Cmd.ARG_CALENDARS:	Cmd.ARG_CALENDAR,
-        Cmd.ARG_CONTACTS:	Cmd.ARG_CONTACT,
-        Cmd.ARG_CONTACT_GROUPS:	Cmd.ARG_CONTACT_GROUP,
-        Cmd.ARG_DELEGATES:	Cmd.ARG_DELEGATE,
-        Cmd.ARG_FILTERS:	Cmd.ARG_FILTER,
-        Cmd.ARG_FORWARDINGADDRESS:	Cmd.ARG_FORWARDINGADDRESSES,
-        Cmd.ARG_LABELS:		Cmd.ARG_LABEL,
-        Cmd.ARG_LICENCE:	Cmd.ARG_LICENSE,
-        Cmd.ARG_SHEETS:		Cmd.ARG_SHEET,
-        Cmd.ARG_SITES:		Cmd.ARG_SITE,
-        Cmd.ARG_SITEACL:	Cmd.ARG_SITEACLS,
-       },
+     CMD_FUNCTION:	USER_ADD_CREATE_FUNCTIONS,
+     CMD_OBJ_ALIASES:	USER_ADD_CREATE_ALIASES,
     },
   u'delete':
     {CMD_ACTION: Act.DELETE,
@@ -30409,9 +30393,7 @@ USER_COMMANDS_WITH_OBJECTS = {
      CMD_FUNCTION:
        {Cmd.ARG_DRIVETRASH:	emptyDriveTrash,
        },
-     CMD_OBJ_ALIASES:
-       {
-       },
+     CMD_OBJ_ALIASES:		{},
     },
   u'get':
     {CMD_ACTION: Act.DOWNLOAD,
@@ -30419,9 +30401,7 @@ USER_COMMANDS_WITH_OBJECTS = {
        {Cmd.ARG_DRIVEFILE:	getDriveFile,
         Cmd.ARG_PHOTO:		getPhoto,
        },
-     CMD_OBJ_ALIASES:
-       {
-       },
+     CMD_OBJ_ALIASES:		{},
     },
   u'import':
     {CMD_ACTION: Act.IMPORT,
@@ -30502,9 +30482,7 @@ USER_COMMANDS_WITH_OBJECTS = {
      CMD_FUNCTION:
        {Cmd.ARG_DRIVEFILE:	purgeDriveFile,
        },
-     CMD_OBJ_ALIASES:
-       {
-       },
+     CMD_OBJ_ALIASES:		{},
     },
   u'print':
     {CMD_ACTION: Act.PRINT,
@@ -30956,7 +30934,6 @@ def doLoop():
   closeFile(f)
   if multi:
     terminateCSVFileQueueHandler(mpQueue, mpQueueHandler)
-
 #
 if sys.platform.startswith('win'):
   from multiprocessing import freeze_support
