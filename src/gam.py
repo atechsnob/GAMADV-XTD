@@ -22,7 +22,7 @@ For more information, see https://github.com/taers232c/GAMADV-XTD
 """
 
 __author__ = u'Ross Scroggs <ross.scroggs@gmail.com>'
-__version__ = u'4.54.50'
+__version__ = u'4.54.51'
 __license__ = u'Apache License 2.0 (http://www.apache.org/licenses/LICENSE-2.0)'
 
 import sys
@@ -4327,7 +4327,7 @@ def writeCSVfile(csvRows, titles, list_type, todrive, quotechar=None):
 
   def writeCSVToDrive():
     csvFile = StringIOobject()
-    writer = csv.DictWriter(csvFile, titles[u'list'], UTF8,
+    writer = csv.DictWriter(csvFile, titles[u'list'],
                             quoting=csv.QUOTE_MINIMAL, quotechar=quotechar,
                             delimiter=delimiter, lineterminator='\n')
     if writeCSVData(writer):
