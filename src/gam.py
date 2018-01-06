@@ -22,7 +22,7 @@ For more information, see https://github.com/taers232c/GAMADV-XTD
 """
 
 __author__ = u'Ross Scroggs <ross.scroggs@gmail.com>'
-__version__ = u'4.55.09'
+__version__ = u'4.55.10'
 __license__ = u'Apache License 2.0 (http://www.apache.org/licenses/LICENSE-2.0)'
 
 import sys
@@ -3139,7 +3139,7 @@ def buildGAPIObject(api):
   GM.Globals[GM.OAUTH2_CLIENT_ID] = credentials.client_id
   return service
 
-def buildGAPIServiceObject(api, user):
+def buildGAPIServiceObject(api, user, i, count):
   userEmail = convertUIDtoEmailAddress(user)
   _, httpObj, service, _ = getAPIversionHttpService(api)
   GM.Globals[GM.CURRENT_API_USER] = userEmail
@@ -3152,7 +3152,11 @@ def buildGAPIServiceObject(api, user):
   except httplib2.ServerNotFoundError as e:
     systemErrorExit(NETWORK_ERROR_RC, str(e))
   except google.auth.exceptions.RefreshError as e:
-    return (userEmail, handleOAuthTokenError(str(e), True))
+    if isinstance(e.args, tuple):
+      e = e.args[0]
+    handleOAuthTokenError(str(e), True)
+    entityServiceNotApplicableWarning(Ent.USER, user, i, count)
+    return (userEmail, None)
   return (userEmail, service)
 
 def initGDataObject(gdataObj, api):
@@ -3195,8 +3199,10 @@ def getGDataUserCredentials(api, user, i, count):
   except httplib2.ServerNotFoundError as e:
     systemErrorExit(NETWORK_ERROR_RC, str(e))
   except google.auth.exceptions.RefreshError as e:
+    if isinstance(e.args, tuple):
+      e = e.args[0]
     handleOAuthTokenError(str(e), True)
-    entityUnknownWarning(Ent.USER, userEmail, i, count)
+    entityServiceNotApplicableWarning(Ent.USER, user, i, count)
     return (userEmail, None)
 
 def getAdminSettingsObject():
@@ -4053,7 +4059,7 @@ def _validateUserGetObjectList(user, i, count, entity):
     entityList = entity[u'dict'][user]
   else:
     entityList = entity[u'list']
-  user, gmail = buildGAPIServiceObject(API.GMAIL, user)
+  user, gmail = buildGAPIServiceObject(API.GMAIL, user, i, count)
   if not gmail:
     return (user, None, [], 0)
   jcount = len(entityList)
@@ -4062,7 +4068,7 @@ def _validateUserGetObjectList(user, i, count, entity):
     setSysExitRC(NO_ENTITIES_FOUND)
   return (user, gmail, entityList, jcount)
 
-def _validateUserGetMessageIds(user, entity):
+def _validateUserGetMessageIds(user, i, count, entity):
   if entity:
     if entity[u'dict']:
       entityList = entity[u'dict'][user]
@@ -4070,7 +4076,7 @@ def _validateUserGetMessageIds(user, entity):
       entityList = entity[u'list']
   else:
     entityList = []
-  user, gmail = buildGAPIServiceObject(API.GMAIL, user)
+  user, gmail = buildGAPIServiceObject(API.GMAIL, user, i, count)
   if not gmail:
     return (user, None, None)
   return (user, gmail, entityList)
@@ -4169,7 +4175,7 @@ def getTodriveParameters():
     invalidTodriveUserExit(Ent.USER, Msg.NOT_FOUND)
   todrive[u'user'] = user
   if todrive[u'fileId']:
-    _, drive = buildGAPIServiceObject(API.DRIVE3, todrive[u'user'])
+    _, drive = buildGAPIServiceObject(API.DRIVE3, todrive[u'user'], 0, 0)
     try:
       result = callGAPI(drive.files(), u'get',
                         throw_reasons=[GAPI.FILE_NOT_FOUND],
@@ -4183,7 +4189,7 @@ def getTodriveParameters():
   elif not todrive[u'parent'] or todrive[u'parent'] == u'root':
     todrive[u'parentId'] = u'root'
   else:
-    _, drive = buildGAPIServiceObject(API.DRIVE3, todrive[u'user'])
+    _, drive = buildGAPIServiceObject(API.DRIVE3, todrive[u'user'], 0, 0)
     if todrive[u'parent'].startswith(u'id:'):
       try:
         result = callGAPI(drive.files(), u'get',
@@ -4216,7 +4222,7 @@ def getTodriveParameters():
 # Send an email
 def send_email(msg_subj, msg_txt, msg_rcpt, i=0, count=0):
   from email.mime.text import MIMEText
-  userId, gmail = buildGAPIServiceObject(API.GMAIL, _getValueFromOAuth(u'email'))
+  userId, gmail = buildGAPIServiceObject(API.GMAIL, _getValueFromOAuth(u'email'), 0, 0)
   if not gmail:
     return
   msg = MIMEText(msg_txt)
@@ -4423,7 +4429,7 @@ def writeCSVfile(csvRows, titles, list_type, todrive, sortTitles=None, quotechar
       if todrive[u'timestamp']:
         timestamp = datetime.datetime.now(GC.Values[GC.TIMEZONE])+datetime.timedelta(days=-todrive[u'daysoffset'], hours=-todrive[u'hoursoffset'])
         title += u' - '+ISOformatTimeStamp(timestamp)
-      _, drive = buildGAPIServiceObject(API.DRIVE3, todrive[u'user'])
+      _, drive = buildGAPIServiceObject(API.DRIVE3, todrive[u'user'], 0, 0)
       try:
         if not todrive[u'fileId']:
           result = callGAPI(drive.files(), u'create',
@@ -13913,7 +13919,7 @@ def checkCalendarExists(cal, calId, showMessage=False):
     return None
 
 def validateCalendar(calId, i=0, count=0):
-  calId, cal = buildGAPIServiceObject(API.CALENDAR, calId)
+  calId, cal = buildGAPIServiceObject(API.CALENDAR, calId, i, count)
   if not cal:
     return (calId, None)
   try:
@@ -14621,7 +14627,7 @@ def _wipeCalendarEvents(user, cal, calIds, count):
     if user:
       calId = normalizeCalendarId(calId, user)
     else:
-      calId, cal = buildGAPIServiceObject(API.CALENDAR, calId)
+      calId, cal = buildGAPIServiceObject(API.CALENDAR, calId, i, count)
       if not cal:
         continue
     try:
@@ -21761,7 +21767,7 @@ def _validateUserGetFileIDs(user, i, count, fileIdEntity, drive=None, entityType
   if fileIdEntity[u'dict']:
     cleanFileIDsList(fileIdEntity, fileIdEntity[u'dict'][user])
   if not drive:
-    user, drive = buildGAPIServiceObject(API.DRIVE3, user)
+    user, drive = buildGAPIServiceObject(API.DRIVE3, user, i, count)
     if not drive:
       return (user, None, 0)
   else:
@@ -21874,7 +21880,7 @@ def _validateUserGetTeamDriveFileIDs(user, i, count, fileIdEntity, drive=None, e
   if fileIdEntity[u'dict']:
     cleanFileIDsList(fileIdEntity, fileIdEntity[u'dict'][user])
   if not drive:
-    user, drive = buildGAPIServiceObject(API.DRIVE3, user)
+    user, drive = buildGAPIServiceObject(API.DRIVE3, user, i, count)
     if not drive:
       return (user, None, 0)
   else:
@@ -21896,7 +21902,7 @@ def _validateUserGetTeamDriveFileIDs(user, i, count, fileIdEntity, drive=None, e
   return (user, drive, l)
 
 def _validateUserTeamDrive(user, i, count, fileIdEntity, useDomainAdminAccess=False):
-  user, drive = buildGAPIServiceObject(API.DRIVE3, user)
+  user, drive = buildGAPIServiceObject(API.DRIVE3, user, i, count)
   if not drive:
     return (user, None)
   if fileIdEntity.get(u'teamdrivename'):
@@ -22106,7 +22112,7 @@ def printDriveActivity(users):
   i, count, users = getEntityArgument(users)
   for user in users:
     i += 1
-    user, activity = buildGAPIServiceObject(API.APPSACTIVITY, user)
+    user, activity = buildGAPIServiceObject(API.APPSACTIVITY, user, i, count)
     if not activity:
       continue
     try:
@@ -22222,7 +22228,7 @@ def _printShowDriveSettings(users, csvFormat):
   i, count, users = getEntityArgument(users)
   for user in users:
     i += 1
-    user, drive = buildGAPIServiceObject(API.DRIVE3, user)
+    user, drive = buildGAPIServiceObject(API.DRIVE3, user, i, count)
     if not drive:
       continue
     if csvFormat:
@@ -22307,7 +22313,7 @@ def _showTeamDriveThemes(users):
   i, count, users = getEntityArgument(users)
   for user in users:
     i += 1
-    user, drive = buildGAPIServiceObject(API.DRIVE3, user)
+    user, drive = buildGAPIServiceObject(API.DRIVE3, user, i, count)
     if not drive:
       continue
     try:
@@ -24436,7 +24442,7 @@ def collectOrphans(users):
   i, count, users = getEntityArgument(users)
   for user in users:
     i += 1
-    user, drive = buildGAPIServiceObject(API.DRIVE3, user)
+    user, drive = buildGAPIServiceObject(API.DRIVE3, user, i, count)
     if not drive:
       continue
     userName, _ = splitEmailAddress(user)
@@ -24630,7 +24636,7 @@ def transferDrive(users):
         return
       ownerUser = childEntryInfo[u'owners'][0][u'emailAddress']
       if ownerUser not in thirdPartyOwners:
-        _, ownerDrive = buildGAPIServiceObject(API.DRIVE3, ownerUser)
+        _, ownerDrive = buildGAPIServiceObject(API.DRIVE3, ownerUser, 0, 0)
         if not ownerDrive:
           return
         thirdPartyOwners[ownerUser] = ownerDrive
@@ -24712,7 +24718,7 @@ def transferDrive(users):
     else:
       ownerUser = childEntryInfo[u'owners'][0][u'emailAddress']
       if ownerUser not in thirdPartyOwners:
-        _, ownerDrive = buildGAPIServiceObject(API.DRIVE, ownerUser)
+        _, ownerDrive = buildGAPIServiceObject(API.DRIVE, ownerUser, 0, 0)
         if not ownerDrive:
           return
         thirdPartyOwners[ownerUser] = ownerDrive
@@ -24793,7 +24799,7 @@ def transferDrive(users):
       if not childEntry[u'info'][u'ownedByMe']:
         ownerUser = childEntry[u'info'][u'owners'][0][u'emailAddress']
         if ownerUser not in thirdPartyOwners:
-          _, ownerDrive = buildGAPIServiceObject(API.DRIVE3, ownerUser)
+          _, ownerDrive = buildGAPIServiceObject(API.DRIVE3, ownerUser, 0, 0)
           if not ownerDrive:
             return
           thirdPartyOwners[ownerUser] = ownerDrive
@@ -24868,7 +24874,7 @@ def transferDrive(users):
         if not childEntry[u'ownedByMe']:
           ownerUser = childEntry[u'owners'][0][u'emailAddress']
           if ownerUser not in thirdPartyOwners:
-            _, ownerDrive = buildGAPIServiceObject(API.DRIVE, ownerUser)
+            _, ownerDrive = buildGAPIServiceObject(API.DRIVE, ownerUser, 0, 0)
             if not ownerDrive:
               continue
             thirdPartyOwners[ownerUser] = ownerDrive
@@ -24977,7 +24983,7 @@ def transferDrive(users):
   if not nonOwnerRetainRoleBody:
     nonOwnerRetainRoleBody = ownerRetainRoleBody
   orderBy = u','.join(orderByList) if orderByList else None
-  targetUser, targetDrive = buildGAPIServiceObject(API.DRIVE3, targetUser)
+  targetUser, targetDrive = buildGAPIServiceObject(API.DRIVE3, targetUser, 0, 0)
   if not targetDrive:
     return
   try:
@@ -25047,7 +25053,7 @@ def transferDrive(users):
   for user in users:
     i += 1
     if buildTree:
-      sourceUser, sourceDrive = buildGAPIServiceObject(API.DRIVE3, user)
+      sourceUser, sourceDrive = buildGAPIServiceObject(API.DRIVE3, user, i, count)
       if not sourceDrive:
         continue
     else:
@@ -25139,7 +25145,7 @@ def transferDrive(users):
     writeCSVfile(csvRows, titles, u'Files to Transfer', todrive)
 
 def validateUserGetPermissionId(user, i=0, count=0):
-  _, drive = buildGAPIServiceObject(API.DRIVE3, user)
+  _, drive = buildGAPIServiceObject(API.DRIVE3, user, i, count)
   if drive:
     try:
       return callGAPI(drive.about(), u'get',
@@ -25550,7 +25556,9 @@ def claimOwnership(users):
         _, userdomain = splitEmailAddress(oldOwner)
         lcount = len(filesToClaim[oldOwner])
         if userdomain == GC.Values[GC.DOMAIN] or userdomain in subdomains:
-          _, sourceDrive = buildGAPIServiceObject(API.DRIVE3, oldOwner)
+          _, sourceDrive = buildGAPIServiceObject(API.DRIVE3, oldOwner, k, kcount)
+          if not sourceDrive:
+            continue
           entityPerformActionNumItemsModifier([Ent.USER, user], lcount, Ent.DRIVE_FILE_OR_FOLDER,
                                               u'{0} {1}: {2}'.format(Act.MODIFIER_FROM, Ent.Singular(Ent.USER), oldOwner), k, kcount)
           Ind.Increment()
@@ -25703,7 +25711,7 @@ def emptyDriveTrash(users):
   if not fileIdEntity:
     for user in users:
       i += 1
-      user, drive = buildGAPIServiceObject(API.DRIVE3, user)
+      user, drive = buildGAPIServiceObject(API.DRIVE3, user, i, count)
       if not drive:
         continue
       try:
@@ -26407,7 +26415,7 @@ def createTeamDrive(users):
   i, count, users = getEntityArgument(users)
   for user in users:
     i += 1
-    user, drive = buildGAPIServiceObject(API.DRIVE3, user)
+    user, drive = buildGAPIServiceObject(API.DRIVE3, user, i, count)
     if not drive:
       continue
     try:
@@ -26573,7 +26581,7 @@ def _printShowTeamDrives(users, csvFormat, useDomainAdminAccess):
   i, count, users = getEntityArgument(users)
   for user in users:
     i += 1
-    user, drive = buildGAPIServiceObject(API.DRIVE3, user)
+    user, drive = buildGAPIServiceObject(API.DRIVE3, user, i, count)
     if not drive:
       continue
     try:
@@ -27072,11 +27080,11 @@ def createSheet(users):
   i, count, users = getEntityArgument(users)
   for user in users:
     i += 1
-    user, sheet = buildGAPIServiceObject(API.SHEETS, user)
+    user, sheet = buildGAPIServiceObject(API.SHEETS, user, i, count)
     if not sheet:
       continue
     if changeParents:
-      user, drive = buildGAPIServiceObject(API.DRIVE3, user)
+      user, drive = buildGAPIServiceObject(API.DRIVE3, user, i, count)
       if not drive:
         continue
       if not _getDriveFileParentInfo(user, i, count, parentBody, parameters, drive):
@@ -27122,7 +27130,7 @@ def _validateUserGetSpreadsheetIDs(user, i, count, fileIdEntity, showEntityType)
   user, _, jcount = _validateUserGetFileIDs(user, i, count, fileIdEntity, entityType=Ent.SPREADSHEET if showEntityType else None)
   if jcount == 0:
     return (user, None, 0)
-  user, sheet = buildGAPIServiceObject(API.SHEETS, user)
+  user, sheet = buildGAPIServiceObject(API.SHEETS, user, i, count)
   if not sheet:
     return (user, None, 0)
   return (user, sheet, jcount)
@@ -27727,7 +27735,7 @@ def _printShowGmailProfile(users, csvFormat):
   i, count, users = getEntityArgument(users)
   for user in users:
     i += 1
-    user, gmail = buildGAPIServiceObject(API.GMAIL, user)
+    user, gmail = buildGAPIServiceObject(API.GMAIL, user, i, count)
     if not gmail:
       continue
     if csvFormat:
@@ -27855,7 +27863,7 @@ def _printShowGplusProfile(users, csvFormat):
   i, count, users = getEntityArgument(users)
   for user in users:
     i += 1
-    user, gplus = buildGAPIServiceObject(API.GPLUS, user)
+    user, gplus = buildGAPIServiceObject(API.GPLUS, user, i, count)
     if not gplus:
       continue
     if csvFormat:
@@ -27934,7 +27942,7 @@ def createLabel(users):
   i, count, users = getEntityArgument(users)
   for user in users:
     i += 1
-    user, gmail = buildGAPIServiceObject(API.GMAIL, user)
+    user, gmail = buildGAPIServiceObject(API.GMAIL, user, i, count)
     if not gmail:
       continue
     if not buildPath:
@@ -28018,7 +28026,7 @@ def updateLabelSettings(users):
   i, count, users = getEntityArgument(users)
   for user in users:
     i += 1
-    user, gmail = buildGAPIServiceObject(API.GMAIL, user)
+    user, gmail = buildGAPIServiceObject(API.GMAIL, user, i, count)
     if not gmail:
       continue
     labels = _getUserGmailLabels(gmail, user, i, count, fields=u'labels(id,name)')
@@ -28078,7 +28086,7 @@ def updateLabels(users):
   i, count, users = getEntityArgument(users)
   for user in users:
     i += 1
-    user, gmail = buildGAPIServiceObject(API.GMAIL, user)
+    user, gmail = buildGAPIServiceObject(API.GMAIL, user, i, count)
     if not gmail:
       continue
     labels = _getUserGmailLabels(gmail, user, i, count, fields=u'labels(id,name,type)')
@@ -28157,7 +28165,7 @@ def deleteLabel(users):
   i, count, users = getEntityArgument(users)
   for user in users:
     i += 1
-    user, gmail = buildGAPIServiceObject(API.GMAIL, user)
+    user, gmail = buildGAPIServiceObject(API.GMAIL, user, i, count)
     if not gmail:
       continue
     try:
@@ -28303,7 +28311,7 @@ def printShowLabels(users, csvFormat):
   i, count, users = getEntityArgument(users)
   for user in users:
     i += 1
-    user, gmail = buildGAPIServiceObject(API.GMAIL, user)
+    user, gmail = buildGAPIServiceObject(API.GMAIL, user, i, count)
     if not gmail:
       continue
     if csvFormat:
@@ -28459,7 +28467,7 @@ def archiveMessages(users):
   i, count, users = getEntityArgument(users)
   for user in users:
     i += 1
-    user, gmail, messageIds = _validateUserGetMessageIds(user, messageEntity)
+    user, gmail, messageIds = _validateUserGetMessageIds(user, i, count, messageEntity)
     if not gmail:
       continue
     try:
@@ -28625,7 +28633,7 @@ def _processMessagesThreads(users, entityType):
   i, count, users = getEntityArgument(users)
   for user in users:
     i += 1
-    user, gmail, messageIds = _validateUserGetMessageIds(user, messageEntity)
+    user, gmail, messageIds = _validateUserGetMessageIds(user, i, count, messageEntity)
     if not gmail:
       continue
     service = [gmail.users().threads(), gmail.users().messages()][entityType == Ent.MESSAGE]
@@ -28910,7 +28918,7 @@ def _importInsertMessage(users, importMsg):
   i, count, users = getEntityArgument(users)
   for user in users:
     i += 1
-    user, gmail = buildGAPIServiceObject(API.GMAIL, user)
+    user, gmail = buildGAPIServiceObject(API.GMAIL, user, i, count)
     if not gmail:
       continue
     userName, _ = splitEmailAddress(user)
@@ -29324,7 +29332,7 @@ def _printShowMessagesThreads(users, entityType, csvFormat):
   i, count, users = getEntityArgument(users)
   for user in users:
     i += 1
-    user, gmail, messageIds = _validateUserGetMessageIds(user, messageEntity)
+    user, gmail, messageIds = _validateUserGetMessageIds(user, i, count, messageEntity)
     if not gmail:
       continue
     service = [gmail.users().threads(), gmail.users().messages()][entityType == Ent.MESSAGE]
@@ -29803,7 +29811,7 @@ def createFilter(users):
   i, count, users = getEntityArgument(users)
   for user in users:
     i += 1
-    user, gmail = buildGAPIServiceObject(API.GMAIL, user)
+    user, gmail = buildGAPIServiceObject(API.GMAIL, user, i, count)
     if not gmail:
       continue
     labels = _getUserGmailLabels(gmail, user, i, count, fields=u'labels(id,name)')
@@ -29908,7 +29916,7 @@ def _printShowFilters(users, csvFormat):
   i, count, users = getEntityArgument(users)
   for user in users:
     i += 1
-    user, gmail = buildGAPIServiceObject(API.GMAIL, user)
+    user, gmail = buildGAPIServiceObject(API.GMAIL, user, i, count)
     if not gmail:
       continue
     if not labelIdsOnly:
@@ -30006,7 +30014,7 @@ def setForward(users):
   i, count, users = getEntityArgument(users)
   for user in users:
     i += 1
-    user, gmail = buildGAPIServiceObject(API.GMAIL, user)
+    user, gmail = buildGAPIServiceObject(API.GMAIL, user, i, count)
     if not gmail:
       continue
     try:
@@ -30045,7 +30053,7 @@ def _printShowForward(users, csvFormat):
   i, count, users = getEntityArgument(users)
   for user in users:
     i += 1
-    user, gmail = buildGAPIServiceObject(API.GMAIL, user)
+    user, gmail = buildGAPIServiceObject(API.GMAIL, user, i, count)
     if not gmail:
       continue
     try:
@@ -30149,7 +30157,7 @@ def _printShowForwardingAddresses(users, csvFormat):
   i, count, users = getEntityArgument(users)
   for user in users:
     i += 1
-    user, gmail = buildGAPIServiceObject(API.GMAIL, user)
+    user, gmail = buildGAPIServiceObject(API.GMAIL, user, i, count)
     if not gmail:
       continue
     try:
@@ -30217,7 +30225,7 @@ def setImap(users):
   i, count, users = getEntityArgument(users)
   for user in users:
     i += 1
-    user, gmail = buildGAPIServiceObject(API.GMAIL, user)
+    user, gmail = buildGAPIServiceObject(API.GMAIL, user, i, count)
     if not gmail:
       continue
     try:
@@ -30234,7 +30242,7 @@ def showImap(users):
   i, count, users = getEntityArgument(users)
   for user in users:
     i += 1
-    user, gmail = buildGAPIServiceObject(API.GMAIL, user)
+    user, gmail = buildGAPIServiceObject(API.GMAIL, user, i, count)
     if not gmail:
       continue
     try:
@@ -30276,7 +30284,7 @@ def setPop(users):
   i, count, users = getEntityArgument(users)
   for user in users:
     i += 1
-    user, gmail = buildGAPIServiceObject(API.GMAIL, user)
+    user, gmail = buildGAPIServiceObject(API.GMAIL, user, i, count)
     if not gmail:
       continue
     try:
@@ -30293,7 +30301,7 @@ def showPop(users):
   i, count, users = getEntityArgument(users)
   for user in users:
     i += 1
-    user, gmail = buildGAPIServiceObject(API.GMAIL, user)
+    user, gmail = buildGAPIServiceObject(API.GMAIL, user, i, count)
     if not gmail:
       continue
     try:
@@ -30405,7 +30413,7 @@ def _createUpdateSendAs(users, addCmd):
   i, count, users = getEntityArgument(users)
   for user in users:
     i += 1
-    user, gmail = buildGAPIServiceObject(API.GMAIL, user)
+    user, gmail = buildGAPIServiceObject(API.GMAIL, user, i, count)
     if not gmail:
       continue
     _processSendAs(user, i, count, Ent.SENDAS_ADDRESS, emailAddress, i, count, gmail, [u'patch', u'create'][addCmd], False, **kwargs)
@@ -30471,7 +30479,7 @@ def _printShowSendAs(users, csvFormat):
   i, count, users = getEntityArgument(users)
   for user in users:
     i += 1
-    user, gmail = buildGAPIServiceObject(API.GMAIL, user)
+    user, gmail = buildGAPIServiceObject(API.GMAIL, user, i, count)
     if not gmail:
       continue
     try:
@@ -30531,7 +30539,7 @@ def createSmime(users):
   i, count, users = getEntityArgument(users)
   for user in users:
     i += 1
-    user, gmail = buildGAPIServiceObject(API.GMAIL, user)
+    user, gmail = buildGAPIServiceObject(API.GMAIL, user, i, count)
     if not gmail:
       continue
     sendAsEmail = sendAsEmailBase if sendAsEmailBase else user
@@ -30599,7 +30607,7 @@ def updateSmime(users):
   i, count, users = getEntityArgument(users)
   for user in users:
     i += 1
-    user, gmail = buildGAPIServiceObject(API.GMAIL, user)
+    user, gmail = buildGAPIServiceObject(API.GMAIL, user, i, count)
     if not gmail:
       continue
     sendAsEmail = sendAsEmailBase if sendAsEmailBase else user
@@ -30634,7 +30642,7 @@ def deleteSmime(users):
   i, count, users = getEntityArgument(users)
   for user in users:
     i += 1
-    user, gmail = buildGAPIServiceObject(API.GMAIL, user)
+    user, gmail = buildGAPIServiceObject(API.GMAIL, user, i, count)
     if not gmail:
       continue
     sendAsEmail = sendAsEmailBase if sendAsEmailBase else user
@@ -30670,7 +30678,7 @@ def _printShowSmimes(users, csvFormat):
   i, count, users = getEntityArgument(users)
   for user in users:
     i += 1
-    user, gmail = buildGAPIServiceObject(API.GMAIL, user)
+    user, gmail = buildGAPIServiceObject(API.GMAIL, user, i, count)
     if not gmail:
       continue
     try:
@@ -30759,7 +30767,7 @@ def setSignature(users):
   i, count, users = getEntityArgument(users)
   for user in users:
     i += 1
-    user, gmail = buildGAPIServiceObject(API.GMAIL, user)
+    user, gmail = buildGAPIServiceObject(API.GMAIL, user, i, count)
     if not gmail:
       continue
     if primary:
@@ -30791,7 +30799,7 @@ def showSignature(users):
   i, count, users = getEntityArgument(users)
   for user in users:
     i += 1
-    user, gmail = buildGAPIServiceObject(API.GMAIL, user)
+    user, gmail = buildGAPIServiceObject(API.GMAIL, user, i, count)
     if not gmail:
       continue
     if primary:
@@ -30929,7 +30937,7 @@ def setVacation(users):
   i, count, users = getEntityArgument(users)
   for user in users:
     i += 1
-    user, gmail = buildGAPIServiceObject(API.GMAIL, user)
+    user, gmail = buildGAPIServiceObject(API.GMAIL, user, i, count)
     if not gmail:
       continue
     try:
@@ -30959,7 +30967,7 @@ def _printShowVacation(users, csvFormat):
   i, count, users = getEntityArgument(users)
   for user in users:
     i += 1
-    user, gmail = buildGAPIServiceObject(API.GMAIL, user)
+    user, gmail = buildGAPIServiceObject(API.GMAIL, user, i, count)
     if not gmail:
       continue
     try:
