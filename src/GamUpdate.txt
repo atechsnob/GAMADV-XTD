@@ -1,3 +1,8 @@
+4.55.16
+
+The following command has been restored.
+gam <UserTypeEntity> create|add teamdrive <Name> [(theme|themeid <String>) | ([customtheme <DriveFileID> <Float> <Float> <Float>] [color <ColorValue>])]
+
 4.55.15
 
 Improved error handling for gam audit commands.
