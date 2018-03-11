@@ -15,15 +15,19 @@ Downloads
 ---------
 You can download the current GAMADV-XTD release from the [GitHub Releases](https://github.com/taers232c/GAMADV-XTD/releases) page. Choose one of the following:
 
-* Single Executable, Linux/Mac OS - `gamadv-x-4.wx.yz-linux-x86_64.xz, gamadv-x-4.wx.yz-macos.tar.xz`
+* Single Executable Archive, Linux - `gamadv-xtd-4.wx.yz-linux-x86_64.tar.xz, gamadv-xtd-4.wx.yz-debian.tar.xz`
   - Download the archive, extract the contents into some directory.
   - Start a terminal session and cd to the install directory.
 
-* Single Executable Archive, Windows - `gamadv-x-4.wx.yz-windows-x64.zip, gamadv-x-4.wx.yz-windows.zip`
+* Single Executable Archive, Mac OS - `gamadv-xtd-4.wx.yz-macos-10.10-11-x86_64.tar, gamadv-xtd-4.wx.yz-macos-10.12-13.tar`
   - Download the archive, extract the contents into some directory.
   - Start a terminal session and cd to the install directory.
 
-* Single Executable Installer, Windows - `gamadv-x-4.wx.yz-windows-x64.msi`
+* Single Executable Archive, Windows - `gamadv-xtd-4.wx.yz-windows-x64.zip, gamadv-xtd-4.wx.yz-windows.zip`
+  - Download the archive, extract the contents into some directory.
+  - Start a terminal session and cd to the install directory.
+
+* Single Executable Installer, Windows - `gamadv-xtd-4.wx.yz-windows-x64.msi`
   - Download the installer and run it.
   - Start a Command Prompt/PowerShell session and cd to the install directory.
 
