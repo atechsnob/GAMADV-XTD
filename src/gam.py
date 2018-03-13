@@ -24422,7 +24422,7 @@ def _printShowFileCounts(users, csvFormat):
     titles, csvRows = initializeTitlesCSVfile([u'User', u'Total'])
   query = ME_IN_OWNERS
   mimeTypeCheck = initMimeTypeCheck()
-  fileIdEntity = {}
+  fileIdEntity = initDriveFileEntity()
   while Cmd.ArgumentsRemaining():
     myarg = getArgument()
     if csvFormat and myarg == u'todrive':
@@ -24460,7 +24460,6 @@ def _printShowFileCounts(users, csvFormat):
     elif myarg == u'showownedby':
       _, query = _getShowOwnedBy(query)
     elif myarg == u'corpora':
-      fileIdEntity.setdefault(u'teamdrive', {})
       _getCorpora(fileIdEntity[u'teamdrive'])
     elif myarg == u'select':
       fileIdEntity = getTeamDriveEntity()
@@ -24481,18 +24480,11 @@ def _printShowFileCounts(users, csvFormat):
     Ind.Increment()
     try:
       printGettingAllEntityItemsForWhom(Ent.DRIVE_FILE_OR_FOLDER, user, i, count, query=query)
-      if not fileIdEntity.get(u'teamdrive'):
-        feed = callGAPIpages(drive.files(), u'list', VX_PAGES_FILES,
-                             page_message=getPageMessageForWhom(),
-                             throw_reasons=GAPI.DRIVE_USER_THROW_REASONS+[GAPI.INVALID_QUERY, GAPI.INVALID],
-                             q=query, fields=pagesfields,
-                             pageSize=GC.Values[GC.DRIVE_MAX_RESULTS])
-      else:
-        feed = callGAPIpages(drive.files(), u'list', VX_PAGES_FILES,
-                             page_message=getPageMessageForWhom(),
-                             throw_reasons=GAPI.DRIVE_USER_THROW_REASONS+[GAPI.INVALID_QUERY, GAPI.INVALID],
-                             q=query, fields=pagesfields,
-                             pageSize=GC.Values[GC.DRIVE_MAX_RESULTS], **fileIdEntity[u'teamdrive'])
+      feed = callGAPIpages(drive.files(), u'list', VX_PAGES_FILES,
+                           page_message=getPageMessageForWhom(),
+                           throw_reasons=GAPI.DRIVE_USER_THROW_REASONS+[GAPI.INVALID_QUERY, GAPI.INVALID],
+                           q=query, fields=pagesfields,
+                           pageSize=GC.Values[GC.DRIVE_MAX_RESULTS], **fileIdEntity[u'teamdrive'])
       for f_file in feed:
         total += 1
         mimeTypeCounts.setdefault(f_file[u'mimeType'], 0)
