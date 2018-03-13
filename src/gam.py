@@ -22,7 +22,7 @@ For more information, see https://github.com/taers232c/GAMADV-XTD
 """
 
 __author__ = u'Ross Scroggs <ross.scroggs@gmail.com>'
-__version__ = u'4.55.42'
+__version__ = u'4.55.43'
 __license__ = u'Apache License 2.0 (http://www.apache.org/licenses/LICENSE-2.0)'
 
 import sys
@@ -4531,6 +4531,8 @@ def flattenJSON(structure, key=u'', path=u'', flattened=None, listLimit=None, ti
     timeObjects = []
   if noLenObjects is None:
     noLenObjects = []
+  if simpleLists is None:
+    simpleLists = []
   if not isinstance(structure, (dict, list, collections.deque)):
     if key not in timeObjects:
       if isinstance(structure, string_types) and GC.Values[GC.CSV_OUTPUT_CONVERT_CR_NL]:
@@ -4545,7 +4547,7 @@ def flattenJSON(structure, key=u'', path=u'', flattened=None, listLimit=None, ti
   elif isinstance(structure, (list, collections.deque)):
     listLen = len(structure)
     listLen = min(listLen, listLimit or listLen)
-    if simpleLists is not None and key in simpleLists:
+    if key in simpleLists:
       flattened[((path+u'.') if path else u'')+key] = u','.join(structure[:listLen])
     else:
       if key not in noLenObjects:
@@ -24420,6 +24422,7 @@ def _printShowFileCounts(users, csvFormat):
     titles, csvRows = initializeTitlesCSVfile([u'User', u'Total'])
   query = ME_IN_OWNERS
   mimeTypeCheck = initMimeTypeCheck()
+  fileIdEntity = {}
   while Cmd.ArgumentsRemaining():
     myarg = getArgument()
     if csvFormat and myarg == u'todrive':
@@ -24456,14 +24459,21 @@ def _printShowFileCounts(users, csvFormat):
       query = _updateAnyOwnerQuery(query)
     elif myarg == u'showownedby':
       _, query = _getShowOwnedBy(query)
+    elif myarg == u'corpora':
+      fileIdEntity.setdefault(u'teamdrive', {})
+      _getCorpora(fileIdEntity[u'teamdrive'])
+    elif myarg == u'select':
+      fileIdEntity = getTeamDriveEntity()
     else:
       unknownArgumentExit()
+  if fileIdEntity.get(u'teamdrive'):
+    query = _updateAnyOwnerQuery(query)
   query = _mapDrive2QueryToDrive3(query)
   pagesfields = VX_NPT_FILES_FIELDLIST.format(u'mimeType')
   i, count, users = getEntityArgument(users)
   for user in users:
     i += 1
-    user, drive = buildGAPIServiceObject(API.DRIVE3, user, i, count)
+    user, drive = _validateUserTeamDrive(user, i, count, fileIdEntity)
     if not drive:
       continue
     total = 0
@@ -24471,10 +24481,18 @@ def _printShowFileCounts(users, csvFormat):
     Ind.Increment()
     try:
       printGettingAllEntityItemsForWhom(Ent.DRIVE_FILE_OR_FOLDER, user, i, count, query=query)
-      feed = callGAPIpages(drive.files(), u'list', VX_PAGES_FILES,
-                           page_message=getPageMessageForWhom(),
-                           throw_reasons=GAPI.DRIVE_USER_THROW_REASONS+[GAPI.INVALID_QUERY, GAPI.INVALID],
-                           q=query, fields=pagesfields, pageSize=GC.Values[GC.DRIVE_MAX_RESULTS])
+      if not fileIdEntity.get(u'teamdrive'):
+        feed = callGAPIpages(drive.files(), u'list', VX_PAGES_FILES,
+                             page_message=getPageMessageForWhom(),
+                             throw_reasons=GAPI.DRIVE_USER_THROW_REASONS+[GAPI.INVALID_QUERY, GAPI.INVALID],
+                             q=query, fields=pagesfields,
+                             pageSize=GC.Values[GC.DRIVE_MAX_RESULTS])
+      else:
+        feed = callGAPIpages(drive.files(), u'list', VX_PAGES_FILES,
+                             page_message=getPageMessageForWhom(),
+                             throw_reasons=GAPI.DRIVE_USER_THROW_REASONS+[GAPI.INVALID_QUERY, GAPI.INVALID],
+                             q=query, fields=pagesfields,
+                             pageSize=GC.Values[GC.DRIVE_MAX_RESULTS], **fileIdEntity[u'teamdrive'])
       for f_file in feed:
         total += 1
         mimeTypeCounts.setdefault(f_file[u'mimeType'], 0)
@@ -24493,18 +24511,19 @@ def _printShowFileCounts(users, csvFormat):
       entityActionFailedWarning([Ent.USER, user, Ent.DRIVE_FILE_OR_FOLDER, None], invalidQuery(query), i, count)
     except (GAPI.serviceNotAvailable, GAPI.authError, GAPI.domainPolicy) as e:
       userSvcNotApplicableOrDriveDisabled(user, str(e), i, count)
-      break
     Ind.Decrement()
   if csvFormat:
     writeCSVfile(csvRows, titles, u'Drive File Counts', todrive, [u'User', u'Total'])
 
-# gam <UserTypeEntity> print filecounts [todrive [<ToDriveAttributes>]] [anyowner|(showownedby any|me|others)]
+# gam <UserTypeEntity> print filecounts [todrive [<ToDriveAttributes>]] [corpora <CorporaAttribute>] [anyowner|(showownedby any|me|others)]
 #	[query <QueryDriveFile>] [fullquery <QueryDriveFile>] [<DriveFileQueryShortcut>] [showmimetype [not] <MimeTypeList>]
+#	[select <TeamDriveEntity>]
 def printFileCounts(users):
   _printShowFileCounts(users, True)
 
-# gam <UserTypeEntity> show filecounts [anyowner|(showownedby any|me|others)]
+# gam <UserTypeEntity> show filecounts [corpora <CorporaAttribute>] [anyowner|(showownedby any|me|others)]
 #	[query <QueryDriveFile>] [fullquery <QueryDriveFile>] [<DriveFileQueryShortcut>] [showmimetype [not] <MimeTypeList>]
+#	[select <TeamDriveEntity>]
 def showFileCounts(users):
   _printShowFileCounts(users, False)
 
