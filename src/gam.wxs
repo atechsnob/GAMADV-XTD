@@ -6,7 +6,7 @@
       Language="1033"
       Version="$(env.GAMVERSION)"
       Manufacturer="Ross Scroggs - ross.scroggs@gmail.com"
-     UpgradeCode="8F29036B-667D-47F2-BAA8-2F79108C492D">
+      UpgradeCode="8F29036B-667D-47F2-BAA8-2F79108C492D">
     <Package
         InstallerVersion="200" Compressed="yes" InstallScope="perMachine" />
 
@@ -72,6 +72,9 @@
       </Component>
       <Component Id="GamUpdate_txt" Guid="1ca32c9e-5a0c-4d0f-a09d-11a460864843">
         <File Name="GamUpdate.txt" KeyPath="yes" />
+      </Component>
+      <Component Id="cacerts_pem" Guid="6dfe9f29-691c-4996-99ca-2467ef67139d">
+        <File Name="cacerts.pem" KeyPath="yes" />
       </Component>
     </ComponentGroup>
   </Fragment>
