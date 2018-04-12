@@ -1,7 +1,8 @@
 GAMADV-XTD
 ========
 GAMADV-XTD is a free, open source command line tool for Google G Suite Administrators to manage domain and user settings quickly and easily.
-This page provides simple instructions for downloading, installing and starting to use GAM.
+
+This page provides simple instructions for downloading, installing and starting to use GAMADV-XTD.
 
 GAMADV-XTD requires G Suite for Business, Education, Partner or Government Edition. Google Apps Free Edition has limited API support and not all GAM commands work.
 
@@ -11,23 +12,39 @@ Documentation
 -------------
 General GAM documentation is hosted in the [GitHub Wiki]. Documentation specifically for GAMADV-XTD is hosted in the [GitHub GAMADV-XTD Wiki] and in Gam*.txt files.
 
+Requirements
+------------
+To run all commands properly, GAMADV-XTD requires three things:
+* An API project which identifies your install of GAMADV-XTD to Google and keeps track of API quotas.
+* Authorization to act as your G Suite Administrator in order to perform management functions like add users, modify group settings and membership and pull domain reports.
+* A special service account that is authorized to act on behalf of your users in order to modify user-specific settings and data such as Drive files, Calendars and Gmail messages and settings like signatures.
+
 Downloads
 ---------
 You can download the current GAMADV-XTD release from the [GitHub Releases](https://github.com/taers232c/GAMADV-XTD/releases) page. Choose one of the following:
 
-* Single Executable Archive, Linux - `gamadv-xtd-4.wx.yz-linux-x86_64.tar.xz, gamadv-xtd-4.wx.yz-debian.tar.xz`
+* Single Executable Archive, Automatic, Linux/Mac OS/Google Cloud Shell
+  - bash <(curl -s -S -L https://git.io/vAAj9) [-l] [-d <Path>]
+  - `-l` - Update to latest version, do not create project or authorizations
+  - `-d <Path>` - Installation Path, defaults to $HOME/bin
+
+* Single Executable Archive, Manual, Google Cloud Shell - `gamadv-xtd-4.wx.yz-debian-x86_64.tar.xz`
   - Download the archive, extract the contents into some directory.
   - Start a terminal session and cd to the install directory.
 
-* Single Executable Archive, Mac OS - `gamadv-xtd-4.wx.yz-macos-10.10-11-x86_64.tar, gamadv-xtd-4.wx.yz-macos-10.12-13.tar`
+* Single Executable Archive, Manual, Linux - `gamadv-xtd-4.wx.yz-linux-x86_64.tar.xz, gamadv-xtd-4.wx.yz-debian-x86_64.tar.xz`
   - Download the archive, extract the contents into some directory.
   - Start a terminal session and cd to the install directory.
 
-* Single Executable Archive, Windows - `gamadv-xtd-4.wx.yz-windows-x64.zip, gamadv-xtd-4.wx.yz-windows.zip`
+* Single Executable Archive, Manual, Mac OS - `gamadv-xtd-4.wx.yz-macos-10.10-11-x86_64.tar, gamadv-xtd-4.wx.yz-macos-10.12-13.tar`
   - Download the archive, extract the contents into some directory.
   - Start a terminal session and cd to the install directory.
 
-* Single Executable Installer, Windows - `gamadv-xtd-4.wx.yz-windows-x64.msi`
+* Single Executable Archive, Manual, Windows - `gamadv-xtd-4.wx.yz-windows-x64.zip, gamadv-xtd-4.wx.yz-windows.zip`
+  - Download the archive, extract the contents into some directory.
+  - Start a terminal session and cd to the install directory.
+
+* Single Executable Installer, Manual, Windows - `gamadv-xtd-4.wx.yz-windows-x64.msi`
   - Download the installer and run it.
   - Start a Command Prompt/PowerShell session and cd to the install directory.
 
@@ -51,7 +68,7 @@ Read GamConfig.txt.
 
 ## Linux/Mac OS
 
-This example assumes that GAMADV-XTD has beem installed in /usr/local/gamadv-xtd.
+This example assumes that GAMADV-X!TD has beem installed in /usr/local/gamadv-xtd.
 Set environment variable OLDGAMPATH to point to the existing Gam directory; /usr/local/gam will be used in this example.
 ```
 admin@server:/usr/local/gamadv-xtd$ export OLDGAMPATH=/usr/local/gam
@@ -778,6 +795,8 @@ C:\GAMADV-XTD>
 Installation - Upgrading from a prior version of GAMADV-XTD
 ---------------------------------------------------------
 Read GamUpdate.txt
+
+Download latest version, install over existing installation or in a parallel directory.
 
 Mailing List / Discussion group
 -------------------------------
