@@ -6993,6 +6993,7 @@ def doDeleteDomainAlias():
   except (GAPI.badRequest, GAPI.notFound, GAPI.forbidden):
     accessErrorExit(cd)
 
+DOMAIN_TIME_OBJECTS = set([u'creationTime',])
 DOMAIN_ALIAS_PRINT_ORDER = [u'parentDomainName', u'creationTime', u'verified',]
 DOMAIN_ALIAS_SKIP_OBJECTS = set([u'domainAliasName',])
 
@@ -7024,6 +7025,18 @@ def doInfoDomainAlias():
   except (GAPI.badRequest, GAPI.notFound, GAPI.forbidden):
     accessErrorExit(cd)
 
+def _printDomain(domain, titles, csvRows):
+  row = {}
+  for attr in domain:
+    if attr not in DEFAULT_SKIP_OBJECTS:
+      if attr in DOMAIN_TIME_OBJECTS:
+        row[attr] = formatLocalTimestamp(domain[attr])
+      else:
+        row[attr] = domain[attr]
+      if attr not in titles[u'set']:
+        addTitleToCSVfile(attr, titles)
+  csvRows.append(row)
+
 # gam print domainaliases [todrive [<ToDriveAttributes>]]
 def doPrintDomainAliases():
   cd = buildGAPIObject(API.DIRECTORY)
@@ -7040,15 +7053,7 @@ def doPrintDomainAliases():
                                   throw_reasons=[GAPI.BAD_REQUEST, GAPI.NOT_FOUND, GAPI.FORBIDDEN],
                                   customer=GC.Values[GC.CUSTOMER_ID])
     for domainAlias in domainAliases:
-      row = {}
-      for attr in domainAlias:
-        if attr not in DEFAULT_SKIP_OBJECTS:
-          if attr == u'creationTime':
-            domainAlias[attr] = formatLocalTimestamp(domainAlias[attr])
-          row[attr] = domainAlias[attr]
-          if attr not in titles[u'set']:
-            addTitleToCSVfile(attr, titles)
-      csvRows.append(row)
+      _printDomain(domainAlias, titles, csvRows)
   except (GAPI.badRequest, GAPI.notFound, GAPI.forbidden):
     accessErrorExit(cd)
   writeCSVfile(csvRows, titles, u'Domain Aliases', todrive, [u'domainAliasName', u'parentDomainName', u'creationTime', u'verified'])
@@ -7106,7 +7111,6 @@ def doDeleteDomain():
 
 DOMAIN_PRINT_ORDER = [u'customerDomain', u'creationTime', u'isPrimary', u'verified',]
 DOMAIN_SKIP_OBJECTS = set([u'domainName', u'domainAliases'])
-DOMAIN_TIME_OBJECTS = set([u'creationTime',])
 
 # gam info domain [<DomainName>] [formatjson]
 def doInfoDomain():
@@ -7155,18 +7159,6 @@ def doInfoDomain():
 
 # gam print domains [todrive [<ToDriveAttributes>]] [formatjson] [quotechar <Character>]
 def doPrintDomains():
-  def _printDomain(domain):
-    row = {}
-    for attr in domain:
-      if attr not in DEFAULT_SKIP_OBJECTS:
-        if attr == u'creationTime':
-          row[attr] = formatLocalTimestamp(domain[attr])
-        else:
-          row[attr] = domain[attr]
-        if attr not in titles[u'set']:
-          addTitleToCSVfile(attr, titles)
-    csvRows.append(row)
-
   cd = buildGAPIObject(API.DIRECTORY)
   formatJSON = False
   quotechar = GC.Values[GC.CSV_OUTPUT_QUOTE_CHAR]
@@ -7194,11 +7186,11 @@ def doPrintDomains():
         continue
       domain[u'type'] = [u'secondary', u'primary'][domain.pop(u'isPrimary')]
       domainAliases = domain.pop(u'domainAliases', [])
-      _printDomain(domain)
+      _printDomain(domain, titles, csvRows)
       for domainAlias in domainAliases:
         domainAlias[u'type'] = u'alias'
         domainAlias[u'domainName'] = domainAlias.pop(u'domainAliasName')
-        _printDomain(domainAlias)
+        _printDomain(domainAlias, titles, csvRows)
   except (GAPI.badRequest, GAPI.notFound, GAPI.forbidden):
     accessErrorExit(cd)
   writeCSVfile(csvRows, titles, u'Domains', todrive, quotechar=quotechar)
