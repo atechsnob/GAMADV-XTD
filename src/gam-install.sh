@@ -86,6 +86,7 @@ case $gamos in
           *Debian*)  gamfile="debian-x86_64.tar.xz";;
           *)  gamfile="linux-x86_64.tar.xz";;
         esac
+        ;;
 #      i?86) gamfile="linux-i686.tar.xz";;
 #      arm*) gamfile="linux-armv7l.tar.xz";;
       *)
