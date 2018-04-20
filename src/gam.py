@@ -22,7 +22,7 @@ For more information, see https://github.com/taers232c/GAMADV-XTD
 """
 
 __author__ = u'Ross Scroggs <ross.scroggs@gmail.com>'
-__version__ = u'4.56.02'
+__version__ = u'4.56.03'
 __license__ = u'Apache License 2.0 (http://www.apache.org/licenses/LICENSE-2.0)'
 
 import sys
@@ -256,6 +256,7 @@ VX_NPT_PERMISSIONS = u'nextPageToken,{0}'.format(VX_PAGES_PERMISSIONS)
 VX_NPT_PERMISSIONS_FIELDLIST = u'nextPageToken,{0}({{0}})'.format(VX_PAGES_PERMISSIONS)
 VX_NPT_REVISIONS_FIELDLIST = u'nextPageToken,{0}({{0}})'.format(VX_PAGES_REVISIONS)
 VX_NPT_REVISIONS_ID_MODIFIEDTIME = u'nextPageToken,{0}(id,{1})'.format(VX_PAGES_REVISIONS, VX_MODIFIED_TIME)
+VX_NPT_TEAMDRIVES_FIELDLIST = u'nextPageToken,teamDrives({0})'
 
 # Cloudprint
 CLOUDPRINT_ACCESS_URL = u'https://www.google.com/cloudprint/addpublicprinter.html?printerid={0}&key={1}'
@@ -4369,6 +4370,12 @@ def addFieldToFieldsList(fieldName, fieldsChoiceMap, fieldsList):
 def _getFieldsList():
   return getString(Cmd.OB_FIELD_NAME_LIST).lower().replace(u',', u' ').split()
 
+def _addInitialField(fieldsList, initialField):
+  if isinstance(initialField, list):
+    fieldsList.extend(initialField)
+  else:
+    fieldsList.append(initialField)
+
 # fieldName is command line argument
 # fieldNameMap maps fieldName to API field names
 #FIELD_CHOICES_MAP = {
@@ -4379,11 +4386,11 @@ def _getFieldsList():
 def getFieldsList(fieldName, fieldsChoiceMap, fieldsList, initialField=None):
   if fieldName in fieldsChoiceMap:
     if not fieldsList and initialField is not None:
-      fieldsList.append(initialField)
+      _addInitialField(fieldsList, initialField)
     fieldsList.append(fieldsChoiceMap[fieldName])
   elif fieldName == u'fields':
     if not fieldsList and initialField is not None:
-      fieldsList.append(initialField)
+      _addInitialField(fieldsList, initialField)
     for field in _getFieldsList():
       if field in fieldsChoiceMap:
         fieldsList.append(fieldsChoiceMap[field])
@@ -4396,11 +4403,11 @@ def getFieldsList(fieldName, fieldsChoiceMap, fieldsList, initialField=None):
 def getFieldsListTitles(fieldName, fieldsChoiceMap, fieldsList, titles, initialField=None):
   if fieldName in fieldsChoiceMap:
     if not fieldsList and initialField is not None:
-      fieldsList.append(initialField)
+      _addInitialField(fieldsList, initialField)
     addFieldToCSVfile(fieldName, fieldsChoiceMap, fieldsList, titles)
   elif fieldName == u'fields':
     if not fieldsList and initialField is not None:
-      fieldsList.append(initialField)
+      _addInitialField(fieldsList, initialField)
     for field in  _getFieldsList():
       if field in fieldsChoiceMap:
         addFieldToCSVfile(field, fieldsChoiceMap, fieldsList, titles)
@@ -25465,7 +25472,7 @@ def updateDriveFile(users):
           break
       Ind.Decrement()
 
-def _cloneFolder(drive, user, i, count, j, jcount, folderId, folderTitle, newFolderTitle, parents, action, noDuplicates, searchArgs):
+def _cloneFolder(drive, user, i, count, j, jcount, folderId, folderTitle, newFolderTitle, parents, noDuplicates, searchArgs):
   if noDuplicates:
     for parentId in parents:
       targetFolders = callGAPIpages(drive.files(), u'list', VX_PAGES_FILES,
@@ -25475,9 +25482,7 @@ def _cloneFolder(drive, user, i, count, j, jcount, folderId, folderTitle, newFol
       if len(targetFolders) > 0:
         for targetFolder in targetFolders:
           if targetFolder[u'capabilities'][u'canAddChildren']:
-            Act.Set(Act.FIND)
             entityActionPerformed([Ent.USER, user, Ent.DRIVE_FOLDER, newFolderTitle, Ent.DRIVE_FOLDER_ID, targetFolder[u'id']], j, jcount)
-            Act.Set(action)
             return targetFolder[u'id']
         entityActionFailedWarning([Ent.USER, user, Ent.DRIVE_FOLDER, newFolderTitle], Msg.NOT_WRITABLE, j, jcount)
         return None
@@ -25532,9 +25537,7 @@ def _cloneFolder(drive, user, i, count, j, jcount, folderId, folderTitle, newFol
             break
     return newFolderId
   except (GAPI.forbidden, GAPI.internalError) as e:
-    Act.Set(Act.CREATE)
     entityActionFailedWarning([Ent.USER, user, Ent.DRIVE_FOLDER, newFolderTitle], str(e), j, jcount)
-    Act.Set(action)
     return None
   except (GAPI.serviceNotAvailable, GAPI.authError, GAPI.domainPolicy) as e:
     userSvcNotApplicableOrDriveDisabled(user, str(e), i, count)
@@ -25556,7 +25559,7 @@ def _checkForDuplicateFile(drive, user, k, kcount, child, newFolderId, searchArg
 #	[teamdriveparentid <DriveFolderID>] [teamdriveparent <TeamDriveName>] [teamdriveparentname <DriveFolderName>]
 def copyDriveFile(users):
   def _recursiveFolderCopy(drive, user, i, count, j, jcount, folderId, folderTitle, newFolderTitle, parents, depth, searchArgs):
-    newFolderId = _cloneFolder(drive, user, i, count, j, jcount, folderId, folderTitle, newFolderTitle, parents, Act.COPY, noDuplicates, searchArgs)
+    newFolderId = _cloneFolder(drive, user, i, count, j, jcount, folderId, folderTitle, newFolderTitle, parents, noDuplicates, searchArgs)
     if newFolderId is None:
       return
     source_children = callGAPIpages(drive.files(), u'list', VX_PAGES_FILES,
@@ -25643,7 +25646,7 @@ def copyDriveFile(users):
           if recursive:
             _recursiveFolderCopy(drive, user, i, count, j, jcount, fileId, metadata[VX_FILENAME], destFilename, body[u'parents'], 0, parameters[DFA_SEARCHARGS])
           else:
-            _cloneFolder(drive, user, i, count, j, jcount, fileId, metadata[VX_FILENAME], destFilename, body[u'parents'], Act.COPY, noDuplicates, parameters[DFA_SEARCHARGS])
+            _cloneFolder(drive, user, i, count, j, jcount, fileId, metadata[VX_FILENAME], destFilename, body[u'parents'], noDuplicates, parameters[DFA_SEARCHARGS])
         else:
           if noDuplicates:
             child = metadata.copy()
@@ -25671,7 +25674,7 @@ def copyDriveFile(users):
 #	[teamdriveparentid <DriveFolderID>] [teamdriveparent <TeamDriveName>] [teamdriveparentname <DriveFolderName>]
 def moveDriveFile(users):
   def _recursiveFolderMove(drive, user, i, count, j, jcount, folderId, folderTitle, newFolderTitle, parents, searchArgs):
-    newFolderId = _cloneFolder(drive, user, i, count, j, jcount, folderId, folderTitle, newFolderTitle, parents, Act.MOVE, noDuplicates, searchArgs)
+    newFolderId = _cloneFolder(drive, user, i, count, j, jcount, folderId, folderTitle, newFolderTitle, parents, noDuplicates, searchArgs)
     if newFolderId is None:
       return
     source_children = callGAPIpages(drive.files(), u'list', VX_PAGES_FILES,
@@ -28116,6 +28119,17 @@ def deleteTeamDrive(users):
     except (GAPI.serviceNotAvailable, GAPI.authError, GAPI.domainPolicy) as e:
       userSvcNotApplicableOrDriveDisabled(user, str(e), i, count)
 
+TEAMDRIVE_FIELDS_CHOICE_MAP = {
+  u'backgroundimagefile': u'backgroundImageFile',
+  u'backgroundimagelink': u'backgroundImageLink',
+  u'capabilities': u'capabilities',
+  u'colorrgb': u'colorRgb',
+  u'createdtime': u'createdTime',
+  u'id': u'id',
+  u'name': u'name',
+  u'themeid': u'themeId',
+  }
+
 TEAMDRIVE_CAPABILITIES_PRINT_ORDER = [
   u'canAddChildren',
   u'canChangeTeamDriveBackground',
@@ -28134,7 +28148,10 @@ TEAMDRIVE_CAPABILITIES_PRINT_ORDER = [
   ]
 TEAMDRIVE_TIME_OBJECTS = set([u'createdTime',])
 
-def _showTeamDrive(user, teamdrive, j, jcount):
+def _showTeamDrive(user, teamdrive, j, jcount, formatJSON):
+  if formatJSON:
+    printLine(json.dumps(cleanJSON(teamdrive, u'', timeObjects=TEAMDRIVE_TIME_OBJECTS), ensure_ascii=False, sort_keys=True))
+    return
   printEntity([Ent.USER, user, Ent.TEAMDRIVE, u'{0} ({1})'.format(teamdrive[u'name'], teamdrive[u'id'])], j, jcount)
   Ind.Increment()
   printEntity([Ent.TEAMDRIVE_ID, teamdrive[u'id']])
@@ -28155,12 +28172,22 @@ def _showTeamDrive(user, teamdrive, j, jcount):
 
 def _infoTeamDrive(users, useDomainAdminAccess):
   fileIdEntity = getTeamDriveEntity()
+  fieldsList = []
+  formatJSON = False
   while Cmd.ArgumentsRemaining():
     myarg = getArgument()
     if myarg in [u'adminaccess', u'asadmin']:
       useDomainAdminAccess = True
+    elif myarg == u'formatjson':
+      formatJSON = True
+    elif getFieldsList(myarg, TEAMDRIVE_FIELDS_CHOICE_MAP, fieldsList, [u'id', u'name']):
+      pass
     else:
       unknownArgumentExit()
+  if fieldsList:
+    fields = u','.join(set(fieldsList)).replace(u'.', u'/')
+  else:
+    fields = u'*'
   i, count, users = getEntityArgument(users)
   for user in users:
     i += 1
@@ -28172,18 +28199,18 @@ def _infoTeamDrive(users, useDomainAdminAccess):
       teamdrive = callGAPI(drive.teamdrives(), u'get',
                            throw_reasons=GAPI.DRIVE_USER_THROW_REASONS+[GAPI.TEAMDRIVE_NOT_FOUND],
                            useDomainAdminAccess=useDomainAdminAccess,
-                           teamDriveId=teamDriveId, fields=u'id,name,createdTime,backgroundImageLink,colorRgb,themeId,capabilities')
-      _showTeamDrive(user, teamdrive, i, count)
+                           teamDriveId=teamDriveId, fields=fields)
+      _showTeamDrive(user, teamdrive, i, count, formatJSON)
     except GAPI.teamDriveNotFound as e:
       entityActionFailedWarning([Ent.USER, user, Ent.TEAMDRIVE_ID, teamDriveId], str(e), i, count)
     except (GAPI.serviceNotAvailable, GAPI.authError, GAPI.domainPolicy) as e:
       userSvcNotApplicableOrDriveDisabled(user, str(e), i, count)
 
-# gam <UserTypeEntity> info teamdrive <TeamDriveEntity> [adminaccess|asadmin]
+# gam <UserTypeEntity> info teamdrive <TeamDriveEntity> [adminaccess|asadmin] [fields <TeamDriveFieldNameList>] [formatjson]
 def infoTeamDrive(users):
   _infoTeamDrive(users, False)
 
-# gam info teamdrive <TeamDriveEntity>
+# gam info teamdrive <TeamDriveEntity> [fields <TeamDriveFieldNameList>] [formatjson]
 def doInfoTeamDrive():
   _infoTeamDrive([_getValueFromOAuth(u'email')], True)
 
@@ -28210,6 +28237,10 @@ def _printShowTeamDrives(users, csvFormat, useDomainAdminAccess):
     titles, csvRows = initializeTitlesCSVfile([u'User', u'id', u'name'])
   roles = set()
   query = matchPattern = None
+  showCapabilities = True
+  fieldsList = []
+  formatJSON = False
+  quotechar = GC.Values[GC.CSV_OUTPUT_QUOTE_CHAR]
   while Cmd.ArgumentsRemaining():
     myarg = getArgument()
     if csvFormat and myarg == u'todrive':
@@ -28224,8 +28255,23 @@ def _printShowTeamDrives(users, csvFormat, useDomainAdminAccess):
       pass
     elif myarg in [u'adminaccess', u'asadmin']:
       useDomainAdminAccess = True
+    elif myarg == "formatjson":
+      formatJSON = True
+      if csvFormat:
+        addTitlesToCSVfile([u'JSON',], titles)
+    elif myarg == u'quotechar':
+      quotechar = getCharacter()
+    elif getFieldsList(myarg, TEAMDRIVE_FIELDS_CHOICE_MAP, fieldsList, [u'id', u'name']):
+      pass
     else:
       unknownArgumentExit()
+  if fieldsList:
+    if not useDomainAdminAccess and u'capabilities' not in fieldsList:
+      addFieldToFieldsList(u'capabilities', TEAMDRIVE_FIELDS_CHOICE_MAP, fieldsList)
+      showCapabilities = False
+    fields = VX_NPT_TEAMDRIVES_FIELDLIST.format(u','.join(set(fieldsList)).replace(u'.', u'/'))
+  else:
+    fields = u'*'
   if csvFormat and not useDomainAdminAccess:
     addTitleToCSVfile(u'role', titles)
   i, count, users = getEntityArgument(users)
@@ -28243,7 +28289,7 @@ def _printShowTeamDrives(users, csvFormat, useDomainAdminAccess):
                            throw_reasons=GAPI.DRIVE_USER_THROW_REASONS+[GAPI.INVALID_QUERY, GAPI.INVALID, GAPI.QUERY_REQUIRES_ADMIN_CREDENTIALS, GAPI.NO_LIST_TEAMDRIVES_ADMINISTRATOR_PRIVILEGE],
                            page_message=getPageMessage(),
                            q=query, useDomainAdminAccess=useDomainAdminAccess,
-                           fields=u'nextPageToken,teamDrives(id,name,createdTime,backgroundImageLink,colorRgb,themeId,capabilities)', pageSize=100)
+                           fields=fields, pageSize=100)
     except (GAPI.invalidQuery, GAPI.invalid, GAPI.queryRequiresAdminCredentials, GAPI.noListTeamDrivesAdministratorPrivilege) as e:
       entityActionFailedWarning([Ent.USER, user, Ent.TEAMDRIVE, None], str(e), i, count)
       continue
@@ -28278,7 +28324,8 @@ def _printShowTeamDrives(users, csvFormat, useDomainAdminAccess):
       matchedFeed = feed
     jcount = len(matchedFeed)
     if not csvFormat:
-      entityPerformActionNumItems([Ent.USER, user], jcount, Ent.TEAMDRIVE, i, count)
+      if not formatJSON:
+        entityPerformActionNumItems([Ent.USER, user], jcount, Ent.TEAMDRIVE, i, count)
     if jcount == 0:
       setSysExitRC(NO_ENTITIES_FOUND)
     else:
@@ -28287,28 +28334,42 @@ def _printShowTeamDrives(users, csvFormat, useDomainAdminAccess):
         j = 0
         for teamdrive in matchedFeed:
           j += 1
-          _showTeamDrive(user, teamdrive, j, jcount)
+          if not showCapabilities:
+            teamdrive.pop(u'capabilities', None)
+          _showTeamDrive(user, teamdrive, j, jcount, formatJSON)
         Ind.Decrement()
       else:
         for teamdrive in matchedFeed:
-          addRowTitlesToCSVfile(flattenJSON(teamdrive, flattened={u'User': user}, timeObjects=TEAMDRIVE_TIME_OBJECTS), csvRows, titles)
+          if not showCapabilities:
+            teamdrive.pop(u'capabilities', None)
+          if formatJSON:
+            row = {u'User': user, u'id': teamdrive[u'id'], u'name': teamdrive[u'name']}
+            if not useDomainAdminAccess:
+              row[u'role'] = teamdrive.pop(u'role')
+            row[u'JSON'] = json.dumps(cleanJSON(teamdrive, u'', timeObjects=TEAMDRIVE_TIME_OBJECTS), ensure_ascii=False, sort_keys=True)
+            csvRows.append(row)
+          else:
+            addRowTitlesToCSVfile(flattenJSON(teamdrive, flattened={u'User': user}, timeObjects=TEAMDRIVE_TIME_OBJECTS), csvRows, titles)
   if csvFormat:
-    sortCSVTitles([u'User', u'name'], titles)
-    writeCSVfile(csvRows, titles, u'TeamDrives', todrive, [u'User', u'id', u'name', u'role'])
+    writeCSVfile(csvRows, titles, u'TeamDrives', todrive, [u'User', u'id', u'name', u'role'], quotechar)
 
 # gam <UserTypeEntity> print teamdrives [adminaccess|asadmin [teamdriveadminquery|query <QueryTeamDrive>]] [matchname <RegularExpression>] (role <TeamDriveACLRole>)* [todrive [<ToDriveAttributes>]]
+#	[fields <TeamDriveFieldNameList>] [formatjson] [quotechar <Character>]
 def printTeamDrives(users):
   _printShowTeamDrives(users, True, False)
 
 # gam <UserTypeEntity> show teamdrives [adminaccess|asadmin [teamdriveadminquery|query <QueryTeamDrive>]] [matchname <RegularExpression>] (role <TeamDriveACLRole>)*
+#	[fields <TeamDriveFieldNameList>] [formatjson] [quotechar <Character>]
 def showTeamDrives(users):
   _printShowTeamDrives(users, False, False)
 
 # gam print teamdrives [teamdriveadminquery|query <QueryTeamDrive>] [matchname <RegularExpression>] [todrive [<ToDriveAttributes>]]
+#	[fields <TeamDriveFieldNameList>] [formatjson] [quotechar <Character>]
 def doPrintTeamDrives():
   _printShowTeamDrives([_getValueFromOAuth(u'email')], True, True)
 
 # gam show teamdrives [teamdriveadminquery|query <QueryTeamDrive>] [matchname <RegularExpression>]
+#	[fields <TeamDriveFieldNameList>] [formatjson] [quotechar <Character>]
 def doShowTeamDrives():
   _printShowTeamDrives([_getValueFromOAuth(u'email')], False, True)
 
