@@ -1810,7 +1810,7 @@ In these commands, the Google administrator named in oauth2.txt is used.
 gam create|add drivefileacl <TeamDriveEntityAdmin> anyone|(user <UserItem>)|(group <GroupItem>)|(domain <DomainName>)
         (role <DriveFileACLRole>) [withlink|(allowfilediscovery|discoverable [<Boolean>])] [expires|expiration <Time>] [sendemail] [emailmessage <String>] [showtitles] [nodetails]
 gam update drivefileacl <TeamDriveEntityAdmin> <DriveFilePermissionIDorEmail>
-        (role <DriveFileACLRole>) [withlink|(allowfilediscovery|discoverable [<Boolean>])] [expires|expiration <Time>] [removeexpiration [<Boolean>]] [showtitles] [nodetails]
+        (role <DriveFileACLRole>) [expires|expiration <Time>] [removeexpiration [<Boolean>]] [showtitles] [nodetails]
 gam delete drivefileacl <TeamDriveEntityAdmin> <DriveFilePermissionIDorEmail> [showtitles]
 gam show drivefileacl <TeamDriveEntityAdmin> [showtitles] (orderby <DriveFileOrderByFieldName> [ascending|descending])*
 gam print drivefileacls <TeamDriveEntityAdmin> [todrive [<ToDriveAttributes>]] [oneitemperrow] [showtitles] (orderby <DriveFileOrderByFieldName> [ascending|descending])*
@@ -1822,7 +1822,7 @@ In these commands, you specify an administrator and then indicate that you want 
 gam <UserTypeEntity> create|add drivefileacl <TeamDriveEntityAdmin> adminaccess anyone|(user <UserItem>)|(group <GroupItem>)|(domain <DomainName>)
         (role <DriveFileACLRole>) [withlink|(allowfilediscovery|discoverable [<Boolean>])] [expires|expiration <Time>] [sendemail] [emailmessage <String>] [showtitles] [nodetails]
 gam <UserTypeEntity> update drivefileacl <TeamDriveEntityAdmin> <DriveFilePermissionIDorEmail> adminaccess
-        (role <DriveFileACLRole>) [withlink|(allowfilediscovery|discoverable [<Boolean>])] [expires|expiration <Time>] [removeexpiration [<Boolean>]] [showtitles] [nodetails]
+        (role <DriveFileACLRole>) [expires|expiration <Time>] [removeexpiration [<Boolean>]] [showtitles] [nodetails]
 gam <UserTypeEntity> delete drivefileacl <TeamDriveEntityAdmin> <DriveFilePermissionIDorEmail> adminaccess [showtitles]
 gam <UserTypeEntity> show drivefileacl <TeamDriveEntityAdmin> adminaccess [showtitles] (orderby <DriveFileOrderByFieldName> [ascending|descending])*
 gam <UserTypeEntity> print drivefileacls <TeamDriveEntityAdmin> [todrive [<ToDriveAttributes>]] adminaccess [oneitemperrow] [showtitles] (orderby <DriveFileOrderByFieldName> [ascending|descending])*
@@ -2161,7 +2161,8 @@ gam <UserTypeEntity> update events <CalendarManageEntity> <EventEntity> <EventUp
 gam <UserTypeEntity> delete events <CalendarManageEntity> <EventEntity> [doit] [notifyattendees]
 gam <UserTypeEntity> wipe events <CalendarManageEntity>
 gam <UserTypeEntity> move events <CalendarManageEntity> <EventEntity> to <CalendarItem> [notifyattendees]
-gam <UserTypeEntity> update calattendees <CalendarManageEntity> <EventEntity> [anyorganizer] [csv <FileName>] (replace <EmailAddress> <EmailAddress>)* [doit]
+gam <UserTypeEntity> update calattendees <CalendarManageEntity> <EventEntity> [anyorganizer]
+        [csv <FileName>] (replace <EmailAddress> <EmailAddress>)* (delete <EmailAddress>)* [doit]
 
 <EventDisplayProperties> ::=
         (alwaysincludeemail)|
@@ -2473,7 +2474,7 @@ gam <UserTypeEntity> print filecounts [todrive [<ToDriveAttributes>]] [corpora <
 gam <UserTypeEntity> print|show filelist [todrive [<ToDriveAttributes>]] [anyowner|(showownedby any|me|others)]
         [query <QueryDriveFile>] [fullquery <QueryDriveFile>] [<DriveFileQueryShortcut>] [corpora <CorporaAttribute>]
         [select <DriveFileEntityListTree>] [selectsubquery <QueryDriveFile>] [showmimetype [not] <MimeTypeList>] [depth <Number>] [showparent]
-        [filepath] [buildtree] [allfields|<DriveFieldName>*|(fields <DriveFieldNameList>)] (orderby <DriveFileOrderByFieldName> [ascending|descending])* [delimiter <Character>]
+        [filepath] [buildtree] [allfields|<DriveFieldName>*|(fields <DriveFieldNameList>)] (orderby <DriveFileOrderByFieldName> [ascending|descending])* [delimiter <Character>] [quotechar <Character>]
 
 <FileTreeFieldName> ::=
         id|

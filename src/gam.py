@@ -22,7 +22,7 @@ For more information, see https://github.com/taers232c/GAMADV-XTD
 """
 
 __author__ = u'Ross Scroggs <ross.scroggs@gmail.com>'
-__version__ = u'4.56.06'
+__version__ = u'4.56.07'
 __license__ = u'Apache License 2.0 (http://www.apache.org/licenses/LICENSE-2.0)'
 
 import sys
@@ -1589,6 +1589,9 @@ def badRequestWarning(entityType, itemType, itemValue):
   printWarningMessage(BAD_REQUEST_RC, u'{0} 0 {1}: {2} {3} - {4}'.format(Msg.GOT, Ent.Plural(entityType),
                                                                          Msg.INVALID, Ent.Singular(itemType),
                                                                          itemValue))
+
+def emptyQuery(query, entityType):
+  return u'{0} ({1}) {2}'.format(Ent.Singular(Ent.QUERY), query, Msg.NO_ENTITIES_FOUND.format(Ent.Plural(entityType)))
 
 def invalidQuery(query):
   return u'{0} ({1}) {2}'.format(Ent.Singular(Ent.QUERY), query, Msg.INVALID)
@@ -4502,7 +4505,7 @@ def sortCSVTitles(sortTitles, titles):
   for title in restoreTitles[::-1]:
     titles[u'list'].insert(0, title)
 
-def writeCSVfile(csvRows, titles, list_type, todrive, sortTitles=None, quotechar=None):
+def writeCSVfile(csvRows, titles, list_type, todrive, sortTitles=None, quotechar=None, fixPaths=False):
 
   def writeCSVData(writer):
     try:
@@ -4590,10 +4593,20 @@ def writeCSVfile(csvRows, titles, list_type, todrive, sortTitles=None, quotechar
     GM.Globals[GM.CSVFILE][GM.REDIRECT_QUEUE].put((GM.REDIRECT_QUEUE_TODRIVE, todrive))
     GM.Globals[GM.CSVFILE][GM.REDIRECT_QUEUE].put((GM.REDIRECT_QUEUE_TITLES, titles[u'list']))
     GM.Globals[GM.CSVFILE][GM.REDIRECT_QUEUE].put((GM.REDIRECT_QUEUE_SORTTITLES, sortTitles))
+    GM.Globals[GM.CSVFILE][GM.REDIRECT_QUEUE].put((GM.REDIRECT_QUEUE_QUOTECHAR, quotechar))
+    GM.Globals[GM.CSVFILE][GM.REDIRECT_QUEUE].put((GM.REDIRECT_QUEUE_FIXPATHS, fixPaths))
     GM.Globals[GM.CSVFILE][GM.REDIRECT_QUEUE].put((GM.REDIRECT_QUEUE_DATA, csvRows))
     return
   if sortTitles is not None:
     sortCSVTitles(sortTitles, titles)
+# Put paths before path.0
+  if fixPaths:
+    try:
+      index = titles[u'list'].index(u'path.0')
+      titles[u'list'].remove(u'paths')
+      titles[u'list'].insert(index, u'paths')
+    except ValueError:
+      pass
   if quotechar is None:
     quotechar = GM.Globals[GM.CSVFILE][GM.REDIRECT_QUOTE_CHAR]
   quotechar = str(quotechar)
@@ -4819,6 +4832,8 @@ def CSVFileQueueHandler(mpQueue):
   titles, csvRows = initializeTitlesCSVfile(None)
   list_type = u'CSV'
   todrive = {}
+  quotechar = sortTitles = None
+  fixPaths = False
   while True:
     dataType, dataItem = mpQueue.get()
     if dataType == GM.REDIRECT_QUEUE_NAME:
@@ -4828,8 +4843,11 @@ def CSVFileQueueHandler(mpQueue):
     elif dataType == GM.REDIRECT_QUEUE_TITLES:
       addTitlesToCSVfile(dataItem, titles)
     elif dataType == GM.REDIRECT_QUEUE_SORTTITLES:
-      if dataItem is not None:
-        sortCSVTitles(dataItem, titles)
+      sortTitles = dataItem
+    elif dataType == GM.REDIRECT_QUEUE_QUOTECHAR:
+      quotechar = dataItem
+    elif dataType == GM.REDIRECT_QUEUE_FIXPATHS:
+      fixPaths = dataItem
     elif dataType == GM.REDIRECT_QUEUE_DATA:
       csvRows.extend(dataItem)
     elif dataType == GM.REDIRECT_QUEUE_ARGS:
@@ -4840,7 +4858,7 @@ def CSVFileQueueHandler(mpQueue):
       GC.Values = dataItem
     else:
       break
-  writeCSVfile(csvRows, titles, list_type, todrive)
+  writeCSVfile(csvRows, titles, list_type, todrive, sortTitles, quotechar, fixPaths)
 
 def initializeCSVFileQueueHandler():
   import multiprocessing
@@ -6670,7 +6688,7 @@ def doSendEmail():
   if body.get(u'primaryEmail'):
     if (count == 1) and (u'password' in body) and (u'name' in body) and (u'givenName' in body[u'name']) and (u'familyName' in body[u'name']):
       notify[u'emailAddress'] = recipients[0]
-      sendCreateUserNotification(notify, body)
+      sendCreateUpdateUserNotification(notify, body)
     else:
       usageErrorExit(Msg.NEWUSER_REQUIREMENTS, True)
     return
@@ -13610,7 +13628,7 @@ def getGroupMembers(cd, groupEmail, roles, membersList, membersSet, i, count, ch
     if not recursive:
       if noduplicates:
         for member in groupMembers:
-          if not (checkNotSuspended and (member[u'status'] == u'SUSPENDED')) and  member[u'id'] not in membersSet:
+          if not (checkNotSuspended and (member[u'status'] == u'SUSPENDED')) and member[u'id'] not in membersSet:
             membersSet.add(member[u'id'])
             membersList.append(member)
       else:
@@ -18236,7 +18254,7 @@ def getUserAttributes(cd, updateCmd, noUid=False):
   if need_password:
     body[u'password'] = u''.join(random.sample(u'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789~`!@#$%^&*()-=_+:;"\'{}[]\\|', 25))
   if notify:
-    notify[u'password'] = body[u'password']
+    notify[u'password'] = body.get(u'password')
   if u'password' in body and need_to_hash_password:
     body[u'password'] = gen_sha512_hash(body[u'password'])
     body[u'hashFunction'] = u'crypt'
@@ -18251,20 +18269,20 @@ def changeAdminStatus(cd, user, admin_body, i=0, count=0):
   except (GAPI.userNotFound, GAPI.domainNotFound, GAPI.domainCannotUseApis, GAPI.forbidden):
     entityUnknownWarning(Ent.USER, user, i, count)
 
-def sendCreateUserNotification(notify, body, i=0, count=0):
+def sendCreateUpdateUserNotification(notify, body, i=0, count=0, createMessage=True):
   def _makeSubstitutions(field):
     notify[field] = _substituteForUser(notify[field], body[u'primaryEmail'], userName)
     notify[field] = notify[field].replace(u'#domain#', domain)
-    notify[field] = notify[field].replace(u'#givenname#', body[u'name'][u'givenName'])
-    notify[field] = notify[field].replace(u'#familyname#', body[u'name'][u'familyName'])
+    notify[field] = notify[field].replace(u'#givenname#', body[u'name'].get(u'givenName', u''))
+    notify[field] = notify[field].replace(u'#familyname#', body[u'name'].get(u'familyName', u''))
     notify[field] = notify[field].replace(u'#password#', notify[u'password'])
 
   userName, domain = splitEmailAddress(body[u'primaryEmail'])
   if not notify.get(u'subject'):
-    notify[u'subject'] = Msg.CREATE_USER_NOTIFY_SUBJECT
+    notify[u'subject'] = [Msg.UPDATE_USER_PASSWORD_CHANGE_NOTIFY_SUBJECT, Msg.CREATE_USER_NOTIFY_SUBJECT][createMessage]
   _makeSubstitutions(u'subject')
   if not notify.get(u'message'):
-    notify[u'message'] = Msg.CREATE_USER_NOTIFY_MESSAGE
+    notify[u'message'] = [Msg.UPDATE_USER_PASSWORD_CHANGE_NOTIFY_MESSAGE, Msg.CREATE_USER_NOTIFY_MESSAGE][createMessage]
   _makeSubstitutions(u'message')
   send_email(notify[u'subject'], notify[u'message'], notify[u'emailAddress'], i, count)
 
@@ -18282,7 +18300,7 @@ def doCreateUser():
     if admin_body:
       changeAdminStatus(cd, user, admin_body)
     if notify.get(u'emailAddress'):
-      sendCreateUserNotification(notify, body)
+      sendCreateUpdateUserNotification(notify, body)
   except GAPI.duplicate:
     entityDuplicateWarning([Ent.USER, user])
   except (GAPI.domainNotFound, GAPI.domainCannotUseApis, GAPI.forbidden) as e:
@@ -18320,11 +18338,13 @@ def updateUsers(entityList):
         vfe = False
       if body:
         try:
-          callGAPI(cd.users(), u'update',
-                   throw_reasons=[GAPI.USER_NOT_FOUND, GAPI.DOMAIN_NOT_FOUND, GAPI.FORBIDDEN,
-                                  GAPI.INVALID, GAPI.INVALID_INPUT, GAPI.INVALID_ORGUNIT, GAPI.INVALID_SCHEMA_VALUE],
-                   userKey=user, body=body, fields=u'')
+          result = callGAPI(cd.users(), u'update',
+                            throw_reasons=[GAPI.USER_NOT_FOUND, GAPI.DOMAIN_NOT_FOUND, GAPI.FORBIDDEN,
+                                           GAPI.INVALID, GAPI.INVALID_INPUT, GAPI.INVALID_ORGUNIT, GAPI.INVALID_SCHEMA_VALUE],
+                            userKey=user, body=body, fields=u'primaryEmail,name')
           entityActionPerformed([Ent.USER, user], i, count)
+          if notify.get(u'emailAddress') and notify.get(u'password'):
+            sendCreateUpdateUserNotification(notify, result, i, count, False)
         except GAPI.userNotFound:
           if createIfNotFound and (count == 1) and not vfe and (u'password' in body) and (u'name' in body) and (u'givenName' in body[u'name']) and (u'familyName' in body[u'name']):
             if u'primaryEmail' not in body:
@@ -18337,7 +18357,7 @@ def updateUsers(entityList):
               Act.Set(Act.CREATE)
               entityActionPerformed([Ent.USER, user], i, count)
               if notify.get(u'emailAddress'):
-                sendCreateUserNotification(notify, body, i, count)
+                sendCreateUpdateUserNotification(notify, body, i, count)
             except GAPI.duplicate:
               entityDuplicateWarning([Ent.USER, user], i, count)
           else:
@@ -22656,7 +22676,8 @@ def moveCalendarEvents(users):
     _moveCalendarEvents(origUser, user, cal, calIds, jcount, calendarEventEntity, newCalId, sendNotifications)
     Ind.Decrement()
 
-# gam <UserTypeEntity> update calattendees <CalendarEntity> <EventEntity> [anyorganizer] [csv <FileName>] (replace <EmailAddress> <EmailAddress>)* [doit]
+# gam <UserTypeEntity> update calattendees <CalendarEntity> <EventEntity> [anyorganizer]
+#	[csv <FileName>] (replace <EmailAddress> <EmailAddress>)* (delete <EmailAddress>)* [doit]
 def updateCalendarAttendees(users):
   calendarEntity = getCalendarEntity()
   calendarEventEntity = getCalendarEventEntity()
@@ -22670,14 +22691,17 @@ def updateCalendarAttendees(users):
     elif myarg == u'replace':
       origAttendee = getEmailAddress(noUid=True)
       attendee_map[origAttendee] = getEmailAddress(noUid=True)
+    elif myarg == u'delete':
+      origAttendee = getEmailAddress(noUid=True)
+      attendee_map[origAttendee] = u'delete'
     elif myarg == u'doit':
       doIt = True
-    elif myarg == u'anyorganizer':
+    elif myarg in [u'anyorganizer', u'allevents']:
       anyOrganizer = True
     else:
       unknownArgumentExit()
   if not attendee_map:
-    missingChoiceExit([u'csv <FileName>', u'replace <EmailAddress> <EmailAddress>'])
+    missingChoiceExit([u'(csv <FileName>)', u'(replace <EmailAddress> <EmailAddress>)', u'(delete <EmailAddress>)'])
   if csv_file:
     f = openFile(csv_file)
     csvFile = csv.reader(f)
@@ -22715,9 +22739,14 @@ def updateCalendarAttendees(users):
             old_email = attendee[u'email'].lower()
             new_email = attendee_map.get(old_email)
             if new_email:
-              entityModifierNewValueActionPerformed([Ent.EVENT, event_summary, Ent.ATTENDEE, old_email], Act.MODIFIER_WITH, new_email, k, kcount)
               event[u'attendees'].remove(attendee)
-              event[u'attendees'].append({u'email': new_email})
+              if new_email != u'delete':
+                event[u'attendees'].append({u'email': new_email})
+                entityModifierNewValueActionPerformed([Ent.EVENT, event_summary, Ent.ATTENDEE, old_email], Act.MODIFIER_WITH, new_email, k, kcount)
+              else:
+                Act.Set(Act.DELETE)
+                entityActionPerformed([Ent.EVENT, event_summary, Ent.ATTENDEE, old_email], k, kcount)
+                Act.Set(Act.UPDATE)
               needs_update = True
         if needs_update:
           Act.Set(Act.UPDATE)
@@ -22837,12 +22866,12 @@ def doDriveSearch(drive, user, i, count, query=None, parentQuery=False, orderBy=
     printGettingAllEntityItemsForWhom(Ent.DRIVE_FILE_OR_FOLDER, user, i, count, query=query)
   try:
     files = callGAPIpages(drive.files(), u'list', VX_PAGES_FILES,
-                          page_message=getPageMessageForWhom(noNL=True),
+                          page_message=getPageMessageForWhom(),
                           throw_reasons=GAPI.DRIVE_USER_THROW_REASONS+[GAPI.INVALID_QUERY, GAPI.INVALID, GAPI.FILE_NOT_FOUND, GAPI.TEAMDRIVE_NOT_FOUND],
                           q=query, orderBy=orderBy, fields=u'nextPageToken,files(id,teamDriveId)', pageSize=GC.Values[GC.DRIVE_MAX_RESULTS], **kwargs)
     if files or not parentQuery:
       return [f_file[u'id'] for f_file in files if not teamDriveOnly or f_file.get(u'teamDriveId')]
-    entityActionFailedWarning([Ent.USER, user, Ent.DRIVE_FILE, None], invalidQuery(query), i, count)
+    entityActionNotPerformedWarning([Ent.USER, user, Ent.DRIVE_FILE, None], emptyQuery(query, Ent.DRIVE_FOLDER), i, count)
   except (GAPI.invalidQuery, GAPI.invalid):
     entityActionFailedWarning([Ent.USER, user, Ent.DRIVE_FILE, None], invalidQuery(query), i, count)
   except GAPI.fileNotFound:
@@ -22858,13 +22887,13 @@ def doTeamDriveSearch(drive, user, i, count, query, useDomainAdminAccess):
     printGettingAllEntityItemsForWhom(Ent.TEAMDRIVE, user, i, count, query=query)
   try:
     files = callGAPIpages(drive.teamdrives(), u'list', u'teamDrives',
-                          page_message=getPageMessageForWhom(noNL=True),
+                          page_message=getPageMessageForWhom(),
                           throw_reasons=GAPI.DRIVE_USER_THROW_REASONS+[GAPI.INVALID_QUERY, GAPI.INVALID, GAPI.QUERY_REQUIRES_ADMIN_CREDENTIALS, GAPI.NO_LIST_TEAMDRIVES_ADMINISTRATOR_PRIVILEGE],
                           q=query, useDomainAdminAccess=useDomainAdminAccess,
                           fields=u'nextPageToken,teamDrives(id)', pageSize=100)
     if files:
       return [f_file[u'id'] for f_file in files]
-    entityActionFailedWarning([Ent.USER, user, Ent.DRIVE_FILE, None], invalidQuery(query), i, count)
+    entityActionNotPerformedWarning([Ent.USER, user, Ent.DRIVE_FILE, None], emptyQuery(query, Ent.TEAMDRIVE), i, count)
   except (GAPI.invalidQuery, GAPI.invalid):
     entityActionFailedWarning([Ent.USER, user, Ent.TEAMDRIVE, None], invalidQuery(query), i, count)
   except (GAPI.queryRequiresAdminCredentials, GAPI.noListTeamDrivesAdministratorPrivilege) as e:
@@ -22996,7 +23025,7 @@ def getDriveFileEntity(orphansOK=False, queryShortcutsOK=True):
           myarg = getString(Cmd.OB_STRING)
           mycmd = myarg.lower().replace(u'_', u'').replace(u'-', u'')
           if (mycmd.startswith(u'teamdriveparent') or
-              (not mycmd.startswith(u'teamdrive')) and (not (queryShortcutsOK and  mycmd in TEAMDRIVE_QUERY_SHORTCUTS_MAP))):
+              (not mycmd.startswith(u'teamdrive')) and (not (queryShortcutsOK and mycmd in TEAMDRIVE_QUERY_SHORTCUTS_MAP))):
             Cmd.Backup()
             break
         else:
@@ -24704,7 +24733,7 @@ FILELIST_FIELDS_TITLES = [u'id', u'mimeType', u'parents']
 # gam <UserTypeEntity> print|show filelist [todrive [<ToDriveAttributes>]] [corpora <CorporaAttribute>] [anyowner|(showownedby any|me|others)]
 #	[query <QueryDriveFile>] [fullquery <QueryDriveFile>] [<DriveFileQueryShortcut>]
 #	[select <DriveFileEntityListTree>] [selectsubquery <QueryDriveFile>] [showmimetype [not] <MimeTypeList>] [depth <Number>] [showparent]
-#	[filepath] [buildtree] [allfields|<DriveFieldName>*|(fields <DriveFieldNameList>)] (orderby <DriveFileOrderByFieldName> [ascending|descending])* [delimiter <Character>]
+#	[filepath] [buildtree] [allfields|<DriveFieldName>*|(fields <DriveFieldNameList>)] (orderby <DriveFileOrderByFieldName> [ascending|descending])* [delimiter <Character>] [quotechar <Character>]
 def printFileList(users):
   def _setSelectionFields():
     if fileIdEntity:
@@ -24835,6 +24864,7 @@ def printFileList(users):
   showOwnedBy = fileTree = None
   mimeTypeCheck = initMimeTypeCheck()
   delimiter = GC.Values[GC.CSV_OUTPUT_FIELD_DELIMITER]
+  quotechar = GC.Values[GC.CSV_OUTPUT_QUOTE_CHAR]
   kwargs = {}
   while Cmd.ArgumentsRemaining():
     myarg = getArgument()
@@ -24902,6 +24932,8 @@ def printFileList(users):
       getMimeTypeCheck(mimeTypeCheck)
     elif myarg == u'delimiter':
       delimiter = getCharacter()
+    elif myarg == u'quotechar':
+      quotechar = getCharacter()
     elif myarg == u'corpora':
       onlyTeamDrives = _getCorpora(kwargs)
       getTeamDriveNames = True
@@ -25074,19 +25106,10 @@ def printFileList(users):
         except (GAPI.serviceNotAvailable, GAPI.authError, GAPI.domainPolicy) as e:
           userSvcNotApplicableOrDriveDisabled(user, str(e), i, count)
           break
-  sortCSVTitles([u'Owner', u'id', fileNameTitle], titles)
-# Put paths before path.0
-  if filepath:
-    try:
-      index = titles[u'list'].index(u'path.0')
-      titles[u'list'].remove(u'paths')
-      titles[u'list'].insert(index, u'paths')
-    except ValueError:
-      pass
   writeCSVfile(csvRows, titles,
                u'{0} {1} Drive Files'.format(Cmd.Argument(GM.Globals[GM.ENTITY_CL_START]),
                                              Cmd.Argument(GM.Globals[GM.ENTITY_CL_START]+1)),
-               todrive)
+               todrive, [u'Owner', u'id', fileNameTitle], quotechar, filepath)
 
 def _printShowFilePaths(users, csvFormat):
   if csvFormat:
@@ -27674,9 +27697,11 @@ def _createDriveFileACL(users, useDomainAdminAccess):
           fileName, entityType = _getDriveFileNameFromId(drive, fileId)
         permission = callGAPI(drive.permissions(), u'create',
                               throw_reasons=GAPI.DRIVE_ACCESS_THROW_REASONS+[GAPI.INVALID_SHARING_REQUEST,
+                                                                             GAPI.TEAMDRIVE_NOT_FOUND,
                                                                              GAPI.CANNOT_SHARE_TEAMDRIVE_TOPFOLDER_WITH_ANYONEORDOMAINS,
                                                                              GAPI.OWNER_ON_TEAMDRIVE_ITEM_NOT_SUPPORTED,
-                                                                             GAPI.ORGANIZER_ON_NON_TEAMDRIVE_ITEM_NOT_SUPPORTED],
+                                                                             GAPI.ORGANIZER_ON_NON_TEAMDRIVE_ITEM_NOT_SUPPORTED,
+                                                                             GAPI.TEAMDRIVES_FOLDER_SHARING_NOT_SUPPORTED],
                               useDomainAdminAccess=useDomainAdminAccess,
                               fileId=fileId, sendNotificationEmail=sendNotificationEmail, emailMessage=emailMessage,
                               transferOwnership=_transferOwnership, body=body, fields=u'*', supportsTeamDrives=True)
@@ -27684,7 +27709,8 @@ def _createDriveFileACL(users, useDomainAdminAccess):
         if showDetails:
           _showDriveFilePermission(permission, printKeys, timeObjects)
       except (GAPI.fileNotFound, GAPI.forbidden, GAPI.internalError, GAPI.insufficientFilePermissions, GAPI.unknownError,
-              GAPI.cannotShareTeamDriveTopFolderWithAnyoneOrDomains, GAPI.ownerOnTeamDriveItemNotSupported, GAPI.organizerOnNonTeamDriveItemNotSupported) as e:
+              GAPI.teamDriveNotFound, GAPI.cannotShareTeamDriveTopFolderWithAnyoneOrDomains, GAPI.ownerOnTeamDriveItemNotSupported,
+              GAPI.organizerOnNonTeamDriveItemNotSupported, GAPI.teamDrivesFolderSharingNotSupported) as e:
         entityActionFailedWarning([Ent.USER, user, entityType, fileName], str(e), j, jcount)
       except GAPI.invalidSharingRequest as e:
         entityActionFailedWarning([Ent.USER, user, entityType, fileName], Ent.TypeNameMessage(Ent.PERMISSION_ID, permissionId, str(e)), j, jcount)
@@ -27711,11 +27737,7 @@ def _updateDriveFileACLs(users, useDomainAdminAccess):
   showDetails = True
   while Cmd.ArgumentsRemaining():
     myarg = getArgument()
-    if myarg == u'withlink':
-      body[u'allowFileDiscovery'] = False
-    elif myarg in [u'allowfilediscovery', u'discoverable']:
-      body[u'allowFileDiscovery'] = getBoolean()
-    elif myarg == u'role':
+    if myarg == u'role':
       body[u'role'] = getChoice(DRIVEFILE_ACL_ROLES_MAP, mapChoice=True)
       if body[u'role'] == u'owner':
         _transferOwnership = True
@@ -27761,6 +27783,7 @@ def _updateDriveFileACLs(users, useDomainAdminAccess):
                                                                              GAPI.CANNOT_SHARE_TEAMDRIVE_TOPFOLDER_WITH_ANYONEORDOMAINS,
                                                                              GAPI.OWNER_ON_TEAMDRIVE_ITEM_NOT_SUPPORTED,
                                                                              GAPI.ORGANIZER_ON_NON_TEAMDRIVE_ITEM_NOT_SUPPORTED,
+                                                                             GAPI.CANNOT_MODIFY_INHERITED_TEAMDRIVE_PERMISSION,
                                                                              GAPI.FIELD_NOT_WRITABLE, GAPI.PERMISSION_NOT_FOUND],
                               useDomainAdminAccess=useDomainAdminAccess,
                               fileId=fileId, permissionId=permissionId, removeExpiration=removeExpiration,
@@ -27771,7 +27794,7 @@ def _updateDriveFileACLs(users, useDomainAdminAccess):
       except (GAPI.fileNotFound, GAPI.forbidden, GAPI.internalError, GAPI.insufficientFilePermissions, GAPI.unknownError,
               GAPI.badRequest, GAPI.invalidOwnershipTransfer,
               GAPI.cannotShareTeamDriveTopFolderWithAnyoneOrDomains, GAPI.ownerOnTeamDriveItemNotSupported, GAPI.organizerOnNonTeamDriveItemNotSupported,
-              GAPI.fieldNotWritable) as e:
+              GAPI.cannotModifyInheritedTeamDrivePermission, GAPI.fieldNotWritable) as e:
         entityActionFailedWarning([Ent.USER, user, entityType, fileName], str(e), j, jcount)
       except GAPI.permissionNotFound:
         entityDoesNotHaveItemWarning([Ent.USER, user, entityType, fileName, Ent.PERMISSION_ID, permissionId], j, jcount)
@@ -27781,12 +27804,12 @@ def _updateDriveFileACLs(users, useDomainAdminAccess):
     Ind.Decrement()
 
 # gam <UserTypeEntity> update drivefileacl <DriveFileEntity> <DriveFilePermissionIDorEmail> [adminaccess|asadmin]
-#	(role reader|commenter|writer|owner|editor|organizer) [withlink|(allowfilediscovery|discoverable [<Boolean>])] [expiration <Time>] [removeexpiration [<Boolean>]] [showtitles] [nodetails]
+#	(role reader|commenter|writer|owner|editor|organizer) [expiration <Time>] [removeexpiration [<Boolean>]] [showtitles] [nodetails]
 def updateDriveFileACLs(users):
   _updateDriveFileACLs(users, False)
 
 # gam update drivefileacl <DriveFileEntity> <DriveFilePermissionIDorEmail>
-#	(role reader|commenter|writer|owner|editor|organizer) [withlink|(allowfilediscovery|discoverable [<Boolean>])] [expiration <Time>] [removeexpiration [<Boolean>]] [showtitles] [nodetails]
+#	(role reader|commenter|writer|owner|editor|organizer) [expiration <Time>] [removeexpiration [<Boolean>]] [showtitles] [nodetails]
 def doUpdateDriveFileACLs():
   _updateDriveFileACLs([_getValueFromOAuth(u'email')], True)
 
@@ -27838,14 +27861,17 @@ def _createDriveFilePermissions(users, useDomainAdminAccess):
       try:
         callGAPI(drive.permissions(), u'create',
                  throw_reasons=GAPI.DRIVE_ACCESS_THROW_REASONS+[GAPI.INVALID_SHARING_REQUEST,
+                                                                GAPI.CANNOT_SHARE_TEAMDRIVE_TOPFOLDER_WITH_ANYONEORDOMAINS,
                                                                 GAPI.OWNER_ON_TEAMDRIVE_ITEM_NOT_SUPPORTED,
-                                                                GAPI.ORGANIZER_ON_NON_TEAMDRIVE_ITEM_NOT_SUPPORTED],
+                                                                GAPI.ORGANIZER_ON_NON_TEAMDRIVE_ITEM_NOT_SUPPORTED,
+                                                                GAPI.TEAMDRIVES_FOLDER_SHARING_NOT_SUPPORTED],
                  retry_reasons=[GAPI.SERVICE_LIMIT],
                  useDomainAdminAccess=useDomainAdminAccess,
                  fileId=ri[RI_ENTITY], sendNotificationEmail=sendNotificationEmail, emailMessage=emailMessage, body=_makePermissionBody(ri[RI_ITEM]), fields=u'')
         entityActionPerformed([Ent.DRIVE_FILE_OR_FOLDER_ID, ri[RI_ENTITY], Ent.PERMITTEE, ri[RI_ITEM]], int(ri[RI_J]), int(ri[RI_JCOUNT]))
       except (GAPI.fileNotFound, GAPI.forbidden, GAPI.internalError, GAPI.insufficientFilePermissions, GAPI.unknownError,
-              GAPI.invalidSharingRequest, GAPI.ownerOnTeamDriveItemNotSupported, GAPI.organizerOnNonTeamDriveItemNotSupported,
+              GAPI.invalidSharingRequest, GAPI.cannotShareTeamDriveTopFolderWithAnyoneOrDomains, GAPI.ownerOnTeamDriveItemNotSupported,
+              GAPI.organizerOnNonTeamDriveItemNotSupported, GAPI.teamDrivesFolderSharingNotSupported,
               GAPI.serviceNotAvailable, GAPI.authError, GAPI.domainPolicy) as e:
         entityActionFailedWarning([Ent.DRIVE_FILE_OR_FOLDER_ID, ri[RI_ENTITY], Ent.PERMITTEE, ri[RI_ITEM]], str(e), int(ri[RI_J]), int(ri[RI_JCOUNT]))
     if int(ri[RI_J]) == int(ri[RI_JCOUNT]):
@@ -27960,11 +27986,12 @@ def _deleteDriveFileACLs(users, useDomainAdminAccess):
         if showTitles:
           fileName, entityType = _getDriveFileNameFromId(drive, fileId)
         callGAPI(drive.permissions(), u'delete',
-                 throw_reasons=GAPI.DRIVE_ACCESS_THROW_REASONS+[GAPI.BAD_REQUEST, GAPI.PERMISSION_NOT_FOUND],
+                 throw_reasons=GAPI.DRIVE_ACCESS_THROW_REASONS+[GAPI.BAD_REQUEST, GAPI.CANNOT_MODIFY_INHERITED_TEAMDRIVE_PERMISSION, GAPI.PERMISSION_NOT_FOUND],
                  useDomainAdminAccess=useDomainAdminAccess,
                  fileId=fileId, permissionId=permissionId, supportsTeamDrives=True)
         entityActionPerformed([Ent.USER, user, entityType, fileName, Ent.PERMISSION_ID, permissionId], j, jcount)
-      except (GAPI.fileNotFound, GAPI.forbidden, GAPI.internalError, GAPI.insufficientFilePermissions, GAPI.unknownError, GAPI.badRequest) as e:
+      except (GAPI.fileNotFound, GAPI.forbidden, GAPI.internalError, GAPI.insufficientFilePermissions, GAPI.unknownError,
+              GAPI.badRequest, GAPI.cannotModifyInheritedTeamDrivePermission) as e:
         entityActionFailedWarning([Ent.USER, user, entityType, fileName], str(e), j, jcount)
       except GAPI.permissionNotFound:
         entityDoesNotHaveItemWarning([Ent.USER, user, entityType, fileName, Ent.PERMISSION_ID, permissionId], j, jcount)
@@ -28004,12 +28031,12 @@ def _deletePermissions(users, useDomainAdminAccess):
       waitOnFailure(1, 10, reason, message)
       try:
         callGAPI(drive.permissions(), u'delete',
-                 throw_reasons=GAPI.DRIVE_ACCESS_THROW_REASONS+[GAPI.BAD_REQUEST, GAPI.PERMISSION_NOT_FOUND],
+                 throw_reasons=GAPI.DRIVE_ACCESS_THROW_REASONS+[GAPI.BAD_REQUEST, GAPI.CANNOT_MODIFY_INHERITED_TEAMDRIVE_PERMISSION, GAPI.PERMISSION_NOT_FOUND],
                  retry_reasons=[GAPI.SERVICE_LIMIT],
                  fileId=ri[RI_ENTITY], permissionId=ri[RI_ITEM], useDomainAdminAccess=useDomainAdminAccess, supportsTeamDrives=True)
         entityActionPerformed([Ent.DRIVE_FILE_OR_FOLDER_ID, ri[RI_ENTITY], Ent.PERMISSION_ID, ri[RI_ITEM]], int(ri[RI_J]), int(ri[RI_JCOUNT]))
       except (GAPI.fileNotFound, GAPI.forbidden, GAPI.internalError, GAPI.insufficientFilePermissions, GAPI.unknownError,
-              GAPI.badRequest, GAPI.permissionNotFound, GAPI.serviceNotAvailable, GAPI.authError, GAPI.domainPolicy) as e:
+              GAPI.badRequest, GAPI.cannotModifyInheritedTeamDrivePermission, GAPI.permissionNotFound, GAPI.serviceNotAvailable, GAPI.authError, GAPI.domainPolicy) as e:
         entityActionFailedWarning([Ent.DRIVE_FILE_OR_FOLDER_ID, ri[RI_ENTITY], Ent.PERMISSION_ID, ri[RI_ITEM]], str(e), int(ri[RI_J]), int(ri[RI_JCOUNT]))
     if int(ri[RI_J]) == int(ri[RI_JCOUNT]):
       Ind.Decrement()
@@ -30463,83 +30490,112 @@ def _convertLabelNamesToIds(gmail, bodyLabels, labelNameMap, addLabelIfMissing):
           parent_label = parent_label[:parent_label.rfind(u'/')]
   return labelIds
 
+MESSAGES_MAX_TO_KEYWORDS = {
+  Act.ARCHIVE: u'maxtoarchive',
+  Act.DELETE: u'maxtodelete',
+  Act.MODIFY: u'maxtomodify',
+  Act.PRINT: u'maxtoprint',
+  Act.SHOW: u'maxtoshow',
+  Act.SPAM: u'maxtospam',
+  Act.TRASH: u'maxtotrash',
+  Act.UNTRASH: u'maxtountrash',
+  }
+
+def _initMessageThreadParameters(entityType, doIt, maxToProcess):
+  listType = [u'threads', u'messages'][entityType == Ent.MESSAGE]
+  return {u'currLabelOp': u'and', u'prevLabelOp': u'and', u'labelGroupOpen':  False, u'query': u'',
+          u'entityType': entityType, u'messageEntity': None, u'doIt': doIt, u'quick': True,
+          u'maxToProcess': maxToProcess, u'maxItems': 0,
+          u'maxToKeywords': [MESSAGES_MAX_TO_KEYWORDS[Act.Get()], u'maxtoprocess'],
+          u'listType': listType, u'fields': u'nextPageToken,{0}(id)'.format(listType)}
+
+def _getMessageSelectParameters(myarg, parameters):
+  if myarg == u'query':
+    parameters[u'query'] += u' ({0})'.format(getString(Cmd.OB_QUERY))
+  elif myarg == u'matchlabel':
+    labelName = getString(Cmd.OB_LABEL_NAME).lower().replace(u' ', u'-').replace(u'/', u'-')
+    if not parameters[u'labelGroupOpen']:
+      parameters[u'query'] += u'('
+      parameters[u'labelGroupOpen'] = True
+    parameters[u'query'] += u' label:{0}'.format(labelName)
+  elif myarg in [u'or', u'and']:
+    parameters[u'prevLabelOp'] = parameters[u'currLabelOp']
+    parameters[u'currLabelOp'] = myarg
+    if parameters[u'labelGroupOpen'] and parameters[u'currLabelOp'] != parameters[u'prevLabelOp']:
+      parameters[u'query'] += u')'
+      parameters[u'labelGroupOpen'] = False
+    if parameters[u'currLabelOp'] == u'or':
+      parameters[u'query'] += u' OR '
+  elif myarg == u'ids':
+    parameters[u'messageEntity'] = getUserObjectEntity(Cmd.OB_MESSAGE_ID, parameters[u'entityType'])
+  elif myarg == u'quick':
+    parameters[u'quick'] = True
+  elif myarg == u'notquick':
+    parameters[u'quick'] = False
+  elif myarg == u'doit':
+    parameters[u'doIt'] = True
+  elif myarg in parameters[u'maxToKeywords']:
+    parameters[u'maxToProcess'] = getInteger(minVal=0)
+  else:
+    return False
+  return True
+
+def _finalizeMessageSelectParameters(parameters, queryOrIdsRequired):
+  if parameters[u'query']:
+    if parameters[u'labelGroupOpen']:
+      parameters[u'query'] += u')'
+  elif queryOrIdsRequired and parameters[u'messageEntity'] is None:
+    missingArgumentExit(u'query|matchlabel|ids')
+  else:
+    parameters[u'query'] = None
+  parameters[u'maxItems'] = [0, parameters[u'maxToProcess']][parameters[u'quick']]
+
 # gam <UserTypeEntity> archive messages <GroupItem> (((query <QueryGmail>) (matchlabel <LabelName>) [or|and])+ [quick|notquick] [doit] [max_to_archive <Number>])|(ids <MessageIDEntity>)
 def archiveMessages(users):
   gm = buildGAPIObject(API.GROUPSMIGRATION)
   entityType = Ent.MESSAGE
-  currLabelOp = prevLabelOp = u'and'
-  labelGroupOpen = False
-  query = u''
-  doIt = quick = True
-  maxToProcess = 0
-  messageEntity = None
+  parameters = _initMessageThreadParameters(entityType, True, 0)
   cd = buildGAPIObject(API.DIRECTORY)
   group = getEmailAddress()
+  while Cmd.ArgumentsRemaining():
+    myarg = getArgument()
+    if _getMessageSelectParameters(myarg, parameters):
+      pass
+    else:
+      unknownArgumentExit()
+  _finalizeMessageSelectParameters(parameters, False)
   try:
     group = callGAPI(cd.groups(), u'get',
                      throw_reasons=GAPI.GROUP_GET_THROW_REASONS,
                      groupKey=group, fields=u'email')[u'email']
   except (GAPI.groupNotFound, GAPI.domainNotFound, GAPI.domainCannotUseApis, GAPI.forbidden, GAPI.badRequest) as e:
     entityDoesNotExistExit(Ent.GROUP, group)
-  while Cmd.ArgumentsRemaining():
-    myarg = getArgument()
-    if myarg == u'query':
-      query += u' ({0})'.format(getString(Cmd.OB_QUERY))
-    elif myarg == u'matchlabel':
-      labelName = getString(Cmd.OB_LABEL_NAME).lower().replace(u' ', u'-').replace(u'/', u'-')
-      if not labelGroupOpen:
-        query += u'('
-        labelGroupOpen = True
-      query += u' label:{0}'.format(labelName)
-    elif myarg in [u'or', u'and']:
-      prevLabelOp = currLabelOp
-      currLabelOp = myarg
-      if labelGroupOpen and currLabelOp != prevLabelOp:
-        query += u')'
-        labelGroupOpen = False
-      if currLabelOp == u'or':
-        query += u' OR '
-    elif myarg == u'ids':
-      messageEntity = getUserObjectEntity(Cmd.OB_MESSAGE_ID, entityType)
-    elif myarg == u'quick':
-      quick = True
-    elif myarg == u'notquick':
-      quick = False
-    elif myarg == u'doit':
-      doIt = True
-    elif myarg in[u'maxtoarchive', u'maxtoprocess']:
-      maxToProcess = getInteger(minVal=0)
-    else:
-      unknownArgumentExit()
-  if query:
-    if labelGroupOpen:
-      query += u')'
-  else:
-    query = None
   i, count, users = getEntityArgument(users)
   for user in users:
     i += 1
-    user, gmail, messageIds = _validateUserGetMessageIds(user, i, count, messageEntity)
+    user, gmail, messageIds = _validateUserGetMessageIds(user, i, count, parameters[u'messageEntity'])
     if not gmail:
       continue
+    service = gmail.users().messages()
     try:
-      if messageEntity is None:
+      if parameters[u'messageEntity'] is None:
         printGettingAllEntityItemsForWhom(entityType, user, i, count)
-        listResult = callGAPIpages(gmail.users().messages(), u'list', u'messages',
-                                   page_message=getPageMessage(), maxItems=[0, maxToProcess][quick],
+        listResult = callGAPIpages(service, u'list', parameters[u'listType'],
+                                   page_message=getPageMessage(), maxItems=parameters[u'maxItems'],
                                    throw_reasons=GAPI.GMAIL_THROW_REASONS,
-                                   userId=u'me', q=query, fields=u'nextPageToken,messages(id)', maxResults=GC.Values[GC.MESSAGE_MAX_RESULTS])
+                                   userId=u'me', q=parameters[u'query'], fields=parameters[u'fields'],
+                                   maxResults=GC.Values[GC.MESSAGE_MAX_RESULTS])
         messageIds = [message[u'id'] for message in listResult]
       jcount = len(messageIds)
       if jcount == 0:
         entityNumEntitiesActionNotPerformedWarning([Ent.USER, user], entityType, jcount, Msg.NO_ENTITIES_MATCHED.format(Ent.Plural(entityType)), i, count)
         setSysExitRC(NO_ENTITIES_FOUND)
         continue
-      if messageEntity is None:
-        if maxToProcess and jcount > maxToProcess:
-          entityNumEntitiesActionNotPerformedWarning([Ent.USER, user], entityType, jcount, Msg.COUNT_N_EXCEEDS_MAX_TO_PROCESS_M.format(jcount, Act.ToPerform(), maxToProcess), i, count)
+      if parameters[u'messageEntity'] is None:
+        if parameters[u'maxToProcess'] and jcount > parameters[u'maxToProcess']:
+          entityNumEntitiesActionNotPerformedWarning([Ent.USER, user], entityType, jcount, Msg.COUNT_N_EXCEEDS_MAX_TO_PROCESS_M.format(jcount, Act.ToPerform(), parameters[u'maxToProcess']), i, count)
           continue
-        if not doIt:
+        if not parameters[u'doIt']:
           entityNumEntitiesActionNotPerformedWarning([Ent.USER, user], entityType, jcount, Msg.USE_DOIT_ARGUMENT_TO_PERFORM_ACTION, i, count)
           continue
       entityPerformActionNumItems([Ent.USER, user], jcount, entityType, i, count)
@@ -30548,7 +30604,7 @@ def archiveMessages(users):
       for messageId in messageIds:
         j += 1
         try:
-          message = callGAPI(gmail.users().messages(), u'get',
+          message = callGAPI(service, u'get',
                              throw_reasons=GAPI.GMAIL_THROW_REASONS+[GAPI.NOT_FOUND, GAPI.INVALID_ARGUMENT],
                              userId=u'me', id=messageId, format=u'raw')
           stream = StringIOobject()
@@ -30624,59 +30680,25 @@ def _processMessagesThreads(users, entityType):
     if bcount > 0:
       executeBatch(dbatch)
 
-  currLabelOp = prevLabelOp = u'and'
-  labelGroupOpen = False
-  query = u''
+  parameters = _initMessageThreadParameters(entityType, False, 1)
   includeSpamTrash = False
-  labelNameMap = {}
-  doIt = quick = False
-  maxToProcess = 1
   function = {Act.DELETE: u'delete', Act.MODIFY: u'modify', Act.SPAM: u'spam', Act.TRASH: u'trash', Act.UNTRASH: u'untrash'}[Act.Get()]
+  labelNameMap = {}
   addLabelNames = []
   addLabelIds = []
   removeLabelNames = []
   removeLabelIds = []
-  messageEntity = None
   while Cmd.ArgumentsRemaining():
     myarg = getArgument()
-    if myarg == u'query':
-      query += u' ({0})'.format(getString(Cmd.OB_QUERY))
-    elif myarg == u'matchlabel':
-      labelName = getString(Cmd.OB_LABEL_NAME).lower().replace(u' ', u'-').replace(u'/', u'-')
-      if not labelGroupOpen:
-        query += u'('
-        labelGroupOpen = True
-      query += u' label:{0}'.format(labelName)
-    elif myarg in [u'or', u'and']:
-      prevLabelOp = currLabelOp
-      currLabelOp = myarg
-      if labelGroupOpen and currLabelOp != prevLabelOp:
-        query += u')'
-        labelGroupOpen = False
-      if currLabelOp == u'or':
-        query += u' OR '
-    elif myarg == u'ids':
-      messageEntity = getUserObjectEntity(Cmd.OB_MESSAGE_ID, entityType)
-    elif myarg == u'quick':
-      quick = True
-    elif myarg == u'notquick':
-      quick = False
-    elif myarg == u'doit':
-      doIt = True
-    elif myarg in [u'maxtodelete', u'maxtomodify', u'maxtospam', u'maxtotrash', u'maxtountrash', u'maxtoprocess']:
-      maxToProcess = getInteger(minVal=0)
+    if _getMessageSelectParameters(myarg, parameters):
+      pass
     elif (function == u'modify') and (myarg == u'addlabel'):
       addLabelNames.append(getString(Cmd.OB_LABEL_NAME))
     elif (function == u'modify') and (myarg == u'removelabel'):
       removeLabelNames.append(getString(Cmd.OB_LABEL_NAME))
     else:
       unknownArgumentExit()
-  if query:
-    if labelGroupOpen:
-      query += u')'
-  elif messageEntity is None:
-    missingArgumentExit(u'query|matchlabel|ids')
-  listType = [u'threads', u'messages'][entityType == Ent.MESSAGE]
+  _finalizeMessageSelectParameters(parameters, True)
   includeSpamTrash = Act.Get() in [Act.DELETE, Act.MODIFY, Act.UNTRASH]
   if function == u'spam':
     function = u'modify'
@@ -30685,7 +30707,7 @@ def _processMessagesThreads(users, entityType):
   i, count, users = getEntityArgument(users)
   for user in users:
     i += 1
-    user, gmail, messageIds = _validateUserGetMessageIds(user, i, count, messageEntity)
+    user, gmail, messageIds = _validateUserGetMessageIds(user, i, count, parameters[u'messageEntity'])
     if not gmail:
       continue
     service = [gmail.users().threads(), gmail.users().messages()][entityType == Ent.MESSAGE]
@@ -30697,12 +30719,12 @@ def _processMessagesThreads(users, entityType):
         labelNameMap = _initLabelNameMap(userGmailLabels)
         addLabelIds = _convertLabelNamesToIds(gmail, addLabelNames, labelNameMap, True)
         removeLabelIds = _convertLabelNamesToIds(gmail, removeLabelNames, labelNameMap, False)
-      if messageEntity is None:
+      if parameters[u'messageEntity'] is None:
         printGettingAllEntityItemsForWhom(Ent.MESSAGE, user, i, count)
-        listResult = callGAPIpages(service, u'list', listType,
-                                   page_message=getPageMessage(), maxItems=[0, maxToProcess][quick],
+        listResult = callGAPIpages(service, u'list', parameters[u'listType'],
+                                   page_message=getPageMessage(), maxItems=parameters[u'maxItems'],
                                    throw_reasons=GAPI.GMAIL_THROW_REASONS,
-                                   userId=u'me', q=query, includeSpamTrash=includeSpamTrash, fields=u'nextPageToken,{0}(id)'.format(listType),
+                                   userId=u'me', q=parameters[u'query'], fields=parameters[u'fields'], includeSpamTrash=includeSpamTrash,
                                    maxResults=GC.Values[GC.MESSAGE_MAX_RESULTS])
         messageIds = [message[u'id'] for message in listResult]
       else:
@@ -30715,11 +30737,11 @@ def _processMessagesThreads(users, entityType):
         entityNumEntitiesActionNotPerformedWarning([Ent.USER, user], entityType, jcount, Msg.NO_ENTITIES_MATCHED.format(Ent.Plural(entityType)), i, count)
         setSysExitRC(NO_ENTITIES_FOUND)
         continue
-      if messageEntity is None:
-        if maxToProcess and jcount > maxToProcess:
-          entityNumEntitiesActionNotPerformedWarning([Ent.USER, user], entityType, jcount, Msg.COUNT_N_EXCEEDS_MAX_TO_PROCESS_M.format(jcount, Act.ToPerform(), maxToProcess), i, count)
+      if parameters[u'messageEntity'] is None:
+        if parameters[u'maxToProcess'] and jcount > parameters[u'maxToProcess']:
+          entityNumEntitiesActionNotPerformedWarning([Ent.USER, user], entityType, jcount, Msg.COUNT_N_EXCEEDS_MAX_TO_PROCESS_M.format(jcount, Act.ToPerform(), parameters[u'maxToProcess']), i, count)
           continue
-        if not doIt:
+        if not parameters[u'doIt']:
           entityNumEntitiesActionNotPerformedWarning([Ent.USER, user], entityType, jcount, Msg.USE_DOIT_ARGUMENT_TO_PERFORM_ACTION, i, count)
           continue
       entityPerformActionNumItems([Ent.USER, user], jcount, entityType, i, count)
@@ -31284,7 +31306,7 @@ def _printShowMessagesThreads(users, entityType, csvFormat):
       svcparms[u'id'] = messageId
       dbatch.add(method(**svcparms), request_id=batchRequestID(user, 0, 0, j, jcount, svcparms[u'id']))
       bcount += 1
-      if maxToProcess and j == maxToProcess:
+      if parameters[u'maxToProcess'] and j == parameters[u'maxToProcess']:
         break
       if bcount == GC.Values[GC.EMAIL_BATCH_SIZE]:
         executeBatch(dbatch)
@@ -31293,16 +31315,12 @@ def _printShowMessagesThreads(users, entityType, csvFormat):
     if bcount > 0:
       executeBatch(dbatch)
 
-  currLabelOp = prevLabelOp = u'and'
-  labelGroupOpen = False
-  query = u''
+  parameters = _initMessageThreadParameters(entityType, True, 0)
   includeSpamTrash = False
-  quick = True
-  maxToProcess = 0
   convertCRNL = GC.Values[GC.CSV_OUTPUT_CONVERT_CR_NL]
   delimiter = GC.Values[GC.CSV_OUTPUT_FIELD_DELIMITER]
   countsOnly = show_attachments = show_body = show_labels = show_size = show_snippet = False
-  attachmentNamePattern = messageEntity = None
+  attachmentNamePattern = None
   headersToShow = [u'Date', u'Subject', u'From', u'Reply-To', u'To', u'Delivered-To', u'Content-Type', u'Message-ID']
   if csvFormat:
     todrive = {}
@@ -31310,30 +31328,8 @@ def _printShowMessagesThreads(users, entityType, csvFormat):
     myarg = getArgument()
     if csvFormat and myarg == u'todrive':
       todrive = getTodriveParameters()
-    elif myarg == u'query':
-      query += u' ({0})'.format(getString(Cmd.OB_QUERY))
-    elif myarg == u'matchlabel':
-      labelName = getString(Cmd.OB_LABEL_NAME).lower().replace(u' ', u'-').replace(u'/', u'-')
-      if not labelGroupOpen:
-        query += u'('
-        labelGroupOpen = True
-      query += u' label:{0}'.format(labelName)
-    elif myarg in [u'or', u'and']:
-      prevLabelOp = currLabelOp
-      currLabelOp = myarg
-      if labelGroupOpen and currLabelOp != prevLabelOp:
-        query += u')'
-        labelGroupOpen = False
-      if currLabelOp == u'or':
-        query += u' OR '
-    elif myarg == u'ids':
-      messageEntity = getUserObjectEntity(Cmd.OB_MESSAGE_ID, entityType)
-    elif myarg == u'quick':
-      quick = True
-    elif myarg == u'notquick':
-      quick = False
-    elif myarg in[u'maxtoprint', u'maxtoshow', u'maxtoprocess']:
-      maxToProcess = getInteger(minVal=0)
+    elif _getMessageSelectParameters(myarg, parameters):
+      pass
     elif myarg == u'headers':
       headersToShow = getString(Cmd.OB_STRING, minLen=0).replace(u',', u' ').split()
     elif myarg in [u'convertcrnl', u'converttextnl', u'convertbodynl']:
@@ -31358,15 +31354,10 @@ def _printShowMessagesThreads(users, entityType, csvFormat):
       countsOnly = True
     else:
       unknownArgumentExit()
-  if query:
-    if labelGroupOpen:
-      query += u')'
-  else:
-    query = None
-  listType = [u'threads', u'messages'][entityType == Ent.MESSAGE]
+  _finalizeMessageSelectParameters(parameters, False)
   if csvFormat:
     if countsOnly:
-      headerTitles = [u'User', listType]
+      headerTitles = [u'User', parameters[u'listType']]
     else:
       headerTitles = [u'User', u'threadId', u'id']
       for j, name in enumerate(headersToShow):
@@ -31379,7 +31370,7 @@ def _printShowMessagesThreads(users, entityType, csvFormat):
   i, count, users = getEntityArgument(users)
   for user in users:
     i += 1
-    user, gmail, messageIds = _validateUserGetMessageIds(user, i, count, messageEntity)
+    user, gmail, messageIds = _validateUserGetMessageIds(user, i, count, parameters[u'messageEntity'])
     if not gmail:
       continue
     service = [gmail.users().threads(), gmail.users().messages()][entityType == Ent.MESSAGE]
@@ -31388,12 +31379,12 @@ def _printShowMessagesThreads(users, entityType, csvFormat):
         labels = _getUserGmailLabels(gmail, user, i, count, fields=u'labels(id,name)')
         if not labels:
           continue
-      if messageEntity is None:
+      if parameters[u'messageEntity'] is None:
         printGettingAllEntityItemsForWhom(entityType, user, i, count)
-        listResult = callGAPIpages(service, u'list', listType,
-                                   page_message=getPageMessage(), maxItems=[0, maxToProcess][quick],
+        listResult = callGAPIpages(service, u'list', parameters[u'listType'],
+                                   page_message=getPageMessage(), maxItems=parameters[u'maxItems'],
                                    throw_reasons=GAPI.GMAIL_THROW_REASONS,
-                                   userId=u'me', q=query, includeSpamTrash=includeSpamTrash, fields=u'nextPageToken,{0}(id)'.format(listType),
+                                   userId=u'me', q=parameters[u'query'], fields=parameters[u'fields'], includeSpamTrash=includeSpamTrash,
                                    maxResults=GC.Values[GC.MESSAGE_MAX_RESULTS])
         messageIds = [message[u'id'] for message in listResult]
       else:
@@ -31406,21 +31397,21 @@ def _printShowMessagesThreads(users, entityType, csvFormat):
         setSysExitRC(NO_ENTITIES_FOUND)
       if countsOnly:
         if not csvFormat:
-          printEntityKVList([Ent.USER, user], [listType, jcount], i, count)
+          printEntityKVList([Ent.USER, user], [parameters[u'listType'], jcount], i, count)
         else:
-          csvRows.append({u'User': user, listType: jcount})
+          csvRows.append({u'User': user, parameters[u'listType']: jcount})
         continue
       if jcount == 0:
         if not csvFormat:
           entityNumEntitiesActionNotPerformedWarning([Ent.USER, user], entityType, jcount, Msg.NO_ENTITIES_MATCHED.format(Ent.Plural(entityType)), i, count)
         continue
       if not csvFormat:
-        if messageEntity is not None or maxToProcess == 0 or jcount <= maxToProcess:
+        if parameters[u'messageEntity'] is not None or parameters[u'maxToProcess'] == 0 or jcount <= parameters[u'maxToProcess']:
           entityPerformActionNumItems([Ent.USER, user], jcount, entityType, i, count)
         else:
-          entityPerformActionNumItemsModifier([Ent.USER, user], maxToProcess, entityType, u'of {0} Total {1}'.format(jcount, Ent.Plural(entityType)), i, count)
-      if messageEntity is None and maxToProcess and (jcount > maxToProcess):
-        jcount = maxToProcess
+          entityPerformActionNumItemsModifier([Ent.USER, user], parameters[u'maxToProcess'], entityType, u'of {0} Total {1}'.format(jcount, Ent.Plural(entityType)), i, count)
+      if parameters[u'messageEntity'] is None and parameters[u'maxToProcess'] and (jcount > parameters[u'maxToProcess']):
+        jcount = parameters[u'maxToProcess']
       if not csvFormat:
         Ind.Increment()
         _batchPrintShowMessagesThreads(service, user, jcount, messageIds, [_callbackShowThread, _callbackShowMessage][entityType == Ent.MESSAGE])
@@ -31442,12 +31433,12 @@ def _printShowMessagesThreads(users, entityType, csvFormat):
         addTitleToCSVfile(u'Body', titles)
     writeCSVfile(csvRows, titles, u'Messages', todrive)
 
-# gam <UserTypeEntity> print message|messages (((query <QueryGmail>) (matchlabel <LabelName>) [or|and])* [quick|notquick] [max_to_show <Number>] [includespamtrash])|(ids <MessageIDEntity>)
+# gam <UserTypeEntity> print message|messages (((query <QueryGmail>) (matchlabel <LabelName>) [or|and])* [quick|notquick] [max_to_print <Number>] [includespamtrash])|(ids <MessageIDEntity>)
 #	[countsonly] [headers <SMTPHeaderList>] [showlabels] [showbody] [showsize] [showsnippet] [convertcrnl] [delimiter <Character>] [todrive [<ToDriveAttributes>]]
 def printMessages(users):
   _printShowMessagesThreads(users, Ent.MESSAGE, True)
 
-# gam <UserTypeEntity> print thread|threads (((query <QueryGmail>) (matchlabel <LabelName>) [or|and])* [quick|notquick] [max_to_show <Number>] [includespamtrash])|(ids <ThreadIDEntity>)
+# gam <UserTypeEntity> print thread|threads (((query <QueryGmail>) (matchlabel <LabelName>) [or|and])* [quick|notquick] [max_to_print <Number>] [includespamtrash])|(ids <ThreadIDEntity>)
 #	[countsonly] [headers <SMTPHeaderList>] [showlabels] [showbody] [showsize] [showsnippet] [convertcrnl] [delimiter <Character>] [todrive [<ToDriveAttributes>]]
 def printThreads(users):
   _printShowMessagesThreads(users, Ent.THREAD, True)
