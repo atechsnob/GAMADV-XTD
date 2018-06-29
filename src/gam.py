@@ -12547,7 +12547,7 @@ COLLABORATIVE_INBOX_ATTRIBUTES = [
   u'whoCanMarkFavoriteReplyOnOwnTopic',
   u'whoCanMarkNoResponseNeeded',
   u'whoCanModifyTagsAndCategories',
-  u'whocantaketopics',
+  u'whoCanTakeTopics',
   u'whoCanUnassignTopic',
   u'whoCanUnmarkFavoriteReplyOnAnyTopic',
   ]
