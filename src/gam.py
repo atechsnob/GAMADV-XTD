@@ -26398,8 +26398,8 @@ def copyDriveFile(users):
         source[u'parents'] = newParents
         if newFilename:
           destFilename = newFilename
-        elif ((newParentsSpecified and newParentId not in sourceParentsList) or
-              ((newParentId in sourceParentsList and
+        elif ((newParentsSpecified and newParentId not in sourceParents) or
+              ((newParentId in sourceParents and
                 (source[u'mimeType'] == MIMETYPE_GA_FOLDER and copyMoveOptions[u'duplicateFolders'] != DUPLICATE_FOLDER_MERGE) or
                 (source[u'mimeType'] != MIMETYPE_GA_FOLDER and copyMoveOptions[u'duplicateFiles'] not in [DUPLICATE_FILE_OVERWRITE_ALL, DUPLICATE_FILE_OVERWRITE_OLDER])))):
           destFilename = sourceFilename
@@ -26647,7 +26647,7 @@ def moveDriveFile(users):
           destFilename = sourceFilename
         targetChildren = callGAPIpages(drive.files(), u'list', VX_PAGES_FILES,
                                        throw_reasons=GAPI.DRIVE_USER_THROW_REASONS,
-                                       q=VX_ANY_NON_TRASHED_MIMETYPE_NAME_PREFIX_WITH_PARENTS.format(source[u'mimeType'], escapeDriveFileName(_getFilenamePrefix(destFilename_), newParentId),
+                                       q=VX_ANY_NON_TRASHED_MIMETYPE_NAME_PREFIX_WITH_PARENTS.format(source[u'mimeType'], escapeDriveFileName(_getFilenamePrefix(destFilename)), newParentId),
                                        orderBy=VX_ORDERBY_FOLDER_DESC_NAME_MODIFIED_TIME,
                                        fields=VX_NPT_FILES_ID_FILENAME_CAPABILITIES_MIMETYPE_MODIFIEDTIME, **parameters[DFA_SEARCHARGS])
         destTeamDriveId = callGAPI(drive.files(), u'get',
