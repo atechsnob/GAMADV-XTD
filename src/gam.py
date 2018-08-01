@@ -22,7 +22,7 @@ For more information, see https://github.com/taers232c/GAMADV-XTD
 """
 
 __author__ = u'Ross Scroggs <ross.scroggs@gmail.com>'
-__version__ = u'4.57.23'
+__version__ = u'4.57.24'
 __license__ = u'Apache License 2.0 (http://www.apache.org/licenses/LICENSE-2.0)'
 
 import sys
@@ -1523,18 +1523,30 @@ def getJSON(deleteFields):
       usageErrorExit(str(e))
   missingArgumentExit(Cmd.OB_JSON_DATA)
 
-def getMatchFields(fieldNames):
+def getMatchSkipFields(fieldNames):
   matchFields = {}
-  while checkArgumentPresent(u'matchfield'):
-    matchField = getString(Cmd.OB_FIELD_NAME).strip(u'~')
-    if (not matchField) or (matchField not in fieldNames):
-      csvFieldErrorExit(matchField, fieldNames, backupArg=True)
-    matchFields[matchField] = getREPattern()
-  return matchFields
+  skipFields = {}
+  while Cmd.ArgumentsRemaining():
+    myarg = getArgument()
+    if myarg in [u'matchfield', u'skipfield']:
+      matchField = getString(Cmd.OB_FIELD_NAME).strip(u'~')
+      if (not matchField) or (matchField not in fieldNames):
+        csvFieldErrorExit(matchField, fieldNames, backupArg=True)
+      if myarg == u'matchfield':
+        matchFields[matchField] = getREPattern()
+      else:
+        skipFields[matchField] = getREPattern()
+    else:
+      Cmd.Backup()
+      break
+  return (matchFields, skipFields)
 
-def checkMatchFields(row, matchFields):
+def checkMatchSkipFields(row, matchFields, skipFields):
   for matchField, matchPattern in iteritems(matchFields):
     if (matchField not in row) or not matchPattern.search(row[matchField]):
+      return False
+  for skipField, matchPattern in iteritems(skipFields):
+    if (skipField in row) and matchPattern.search(row[skipField]):
       return False
   return True
 
@@ -3990,7 +4002,7 @@ def getEntitiesFromFile(shlexSplit):
   closeFile(f)
   return entityList
 
-# <FileName>(:<FieldName>)+ [charset <String>] [columndelimiter <Character>] [quotechar <Character>] [fields <FieldNameList>] (matchfield <FieldName> <RegularExpression>)* [delimiter <Character>]
+# <FileName>(:<FieldName>)+ [charset <String>] [columndelimiter <Character>] [quotechar <Character>] [fields <FieldNameList>] (matchfield|skipfield <FieldName> <RegularExpression>)* [delimiter <Character>]
 def getEntitiesFromCSVFile(shlexSplit):
   drive, fileFieldName = os.path.splitdrive(getString(Cmd.OB_FILE_NAME_FIELD_NAME))
   if fileFieldName.find(u':') == -1:
@@ -4001,12 +4013,12 @@ def getEntitiesFromCSVFile(shlexSplit):
   for fieldName in fileFieldNameList[1:]:
     if fieldName not in csvFile.fieldnames:
       csvFieldErrorExit(fieldName, csvFile.fieldnames, backupArg=True, checkForCharset=True)
-  matchFields = getMatchFields(csvFile.fieldnames)
+  matchFields, skipFields = getMatchSkipFields(csvFile.fieldnames)
   dataDelimiter = getDelimiter()
   entitySet = set()
   entityList = []
   for row in csvFile:
-    if not matchFields or checkMatchFields(row, matchFields):
+    if checkMatchSkipFields(row, matchFields, skipFields):
       for fieldName in fileFieldNameList[1:]:
         for item in splitEntityList(row[fieldName].strip(), dataDelimiter, shlexSplit):
           item = item.strip()
@@ -4019,7 +4031,7 @@ def getEntitiesFromCSVFile(shlexSplit):
 # <FileName> [charset <String>] [columndelimiter <Character>] [quotechar <Character>] [fields <FieldNameList>]
 #	keyfield <FieldName> [keypattern <RegularExpression>] [keyvalue <String>] [delimiter <Character>]
 #	subkeyfield <FieldName> [keypattern <RegularExpression>] [keyvalue <String>] [delimiter <Character>]
-#	(matchfield <FieldName> <RegularExpression>)*
+#	(matchfield|skipfield <FieldName> <RegularExpression>)*
 #	[datafield <FieldName>(:<FieldName>)* [delimiter <Character>]]
 def getEntitiesFromCSVbyField():
 
@@ -4041,11 +4053,11 @@ def getEntitiesFromCSVbyField():
     keyDelimiter = getDelimiter()
     return (keyField, keyPattern, keyValue, keyDelimiter)
 
-  def getKeyList(row, keyField, keyPattern, keyValue, keyDelimiter, matchFields):
+  def getKeyList(row, keyField, keyPattern, keyValue, keyDelimiter, matchFields, skipFields):
     item = row[keyField].strip()
     if not item:
       return []
-    if matchFields and not checkMatchFields(row, matchFields):
+    if not checkMatchSkipFields(row, matchFields, skipFields):
       return []
     if keyPattern:
       keyList = [keyPattern.sub(keyValue, keyItem.strip()) for keyItem in splitEntityList(item, keyDelimiter, False)]
@@ -4057,7 +4069,7 @@ def getEntitiesFromCSVbyField():
   f, csvFile = openCSVFileReader(filename)
   mainKeyField, mainKeyPattern, mainKeyValue, mainKeyDelimiter = getKeyFieldInfo(u'keyfield', True, GM.CSV_KEY_FIELD)
   subKeyField, subKeyPattern, subKeyValue, subKeyDelimiter = getKeyFieldInfo(u'subkeyfield', False, GM.CSV_SUBKEY_FIELD)
-  matchFields = getMatchFields(csvFile.fieldnames)
+  matchFields, skipFields = getMatchSkipFields(csvFile.fieldnames)
   if checkArgumentPresent(u'datafield'):
     if GM.Globals[GM.CSV_DATA_DICT]:
       csvDataAlreadySavedErrorExit()
@@ -4077,7 +4089,7 @@ def getEntitiesFromCSVbyField():
   GM.Globals[GM.CSV_DATA_DICT] = {}
   if not subKeyField:
     for row in csvFile:
-      mainKeyList = getKeyList(row, mainKeyField, mainKeyPattern, mainKeyValue, mainKeyDelimiter, matchFields)
+      mainKeyList = getKeyList(row, mainKeyField, mainKeyPattern, mainKeyValue, mainKeyDelimiter, matchFields, skipFields)
       if not mainKeyList:
         continue
       for mainKey in mainKeyList:
@@ -4101,7 +4113,7 @@ def getEntitiesFromCSVbyField():
   else:
     csvSubKeys = {}
     for row in csvFile:
-      mainKeyList = getKeyList(row, mainKeyField, mainKeyPattern, mainKeyValue, mainKeyDelimiter, matchFields)
+      mainKeyList = getKeyList(row, mainKeyField, mainKeyPattern, mainKeyValue, mainKeyDelimiter, matchFields, skipFields)
       if not mainKeyList:
         continue
       for mainKey in mainKeyList:
@@ -4111,7 +4123,7 @@ def getEntitiesFromCSVbyField():
           csvSubKeys[mainKey] = set()
           csvDataKeys[mainKey] = {}
           GM.Globals[GM.CSV_DATA_DICT][mainKey] = {}
-      subKeyList = getKeyList(row, subKeyField, subKeyPattern, subKeyValue, subKeyDelimiter, {})
+      subKeyList = getKeyList(row, subKeyField, subKeyPattern, subKeyValue, subKeyDelimiter, {}, {})
       if not subKeyList:
         continue
       for mainKey in mainKeyList:
@@ -5401,21 +5413,21 @@ def processSubFields(GAM_argv, row, subFields):
     argv[GAM_argvI] += oargv[pos:]
   return argv
 
-# gam csv <FileName>|- [charset <Charset>] [columndelimiter <Character>] [quotechar <Character>] [fields <FieldNameList>] (matchfield <FieldName> <RegularExpression>)* gam <GAM argument list>
+# gam csv <FileName>|- [charset <Charset>] [columndelimiter <Character>] [quotechar <Character>] [fields <FieldNameList>] (matchfield|skipfield <FieldName> <RegularExpression>)* gam <GAM argument list>
 def doCSV():
   filename = getString(Cmd.OB_FILE_NAME)
   if (filename == u'-') and (GC.Values[GC.DEBUG_LEVEL] > 0):
     Cmd.Backup()
     usageErrorExit(Msg.BATCH_CSV_LOOP_DASH_DEBUG_INCOMPATIBLE.format(Cmd.CSV_CMD))
   f, csvFile = openCSVFileReader(filename)
-  matchFields = getMatchFields(csvFile.fieldnames)
+  matchFields, skipFields = getMatchSkipFields(csvFile.fieldnames)
   checkArgumentPresent(Cmd.GAM_CMD, required=True)
   if not Cmd.ArgumentsRemaining():
     missingArgumentExit(Cmd.OB_GAM_ARGUMENT_LIST)
   GAM_argv, subFields = getSubFields([Cmd.GAM_CMD,], csvFile.fieldnames)
   items = collections.deque()
   for row in csvFile:
-    if (not matchFields) or checkMatchFields(row, matchFields):
+    if checkMatchSkipFields(row, matchFields, skipFields):
       items.append(processSubFields(GAM_argv, row, subFields))
   closeFile(f)
   MultiprocessGAMCommands(items, False)
@@ -6774,7 +6786,7 @@ def sendCreateUpdateUserNotification(notify, body, i=0, count=0, createMessage=T
   _makeSubstitutions(u'message')
   send_email(notify[u'subject'], notify[u'message'], notify[u'emailAddress'], i, count, html=notify[u'html'], charset=notify[u'charset'])
 
-# gam sendemail <RecipientEntity> [from <UserItem>] [replyto <EmailAddress>] subject <String> (message <String>)|(file <FileName> [charset <CharSet>]) (replace <RegularExpression> <String>)* [html [<Boolean>]]
+# gam sendemail <RecipientEntity> [from <UserItem>] [replyto <EmailAddress>] subject <String> (message <String>)|(file <FileName> [charset <CharSet>]) (replace <Tag> <String>)* [html [<Boolean>]]
 #	[newuser <EmailAddress> firstname|givenname <String> lastname|familyname <string> password <Password>]
 def doSendEmail():
   body = {}
@@ -27454,6 +27466,15 @@ TRANSFER_DRIVEFILE_ACL_ROLES_MAP = {
 #	[preview] [todrive [<ToDriveAttributes>]]
 def transferDrive(users):
 
+  def _getOwnerUser(childEntryInfo):
+    ownerUser = childEntryInfo[u'owners'][0][u'emailAddress']
+    if ownerUser not in thirdPartyOwners:
+      _, ownerDrive = buildGAPIServiceObject(API.DRIVE3, ownerUser, 0, 0, displayError=False)
+      thirdPartyOwners[ownerUser] = ownerDrive
+    else:
+      ownerDrive = thirdPartyOwners[ownerUser]
+    return (ownerUser, ownerDrive)
+
   TARGET_PARENT_ID = 0
   TARGET_ORPHANS_PARENT_ID = 1
 
@@ -27557,6 +27578,11 @@ def transferDrive(users):
         userSvcNotApplicableOrDriveDisabled(sourceUser, str(e), i, count)
     else:
       Act.Set(Act.PROCESS)
+      ownerUser, ownerDrive = _getOwnerUser(childEntryInfo)
+      if not ownerDrive:
+        entityActionNotPerformedWarning([Ent.USER, sourceUser, childFileType, childFileName],
+                                        Msg.SERVICE_NOT_APPLICABLE_THIS_ADDRESS.format(ownerUser), j, jcount)
+        return
       for permission in childEntryInfo[u'permissions']:
         if sourcePermissionId == permission[u'id']:
           childEntryInfo[u'sourcePermission'] = _setSourceUpdateRole(permission)
@@ -27573,14 +27599,6 @@ def transferDrive(users):
       if csvFormat:
         csvRows.append({u'OldOwner': sourceUser, u'NewOwner': targetUser, u'type': Ent.Singular(childFileType),
                         u'id': childFileId, VX_FILENAME: childFileName, u'role': childEntryInfo[u'sourcePermission'][u'role']})
-        return
-      ownerUser = childEntryInfo[u'owners'][0][u'emailAddress']
-      if ownerUser not in thirdPartyOwners:
-        _, ownerDrive = buildGAPIServiceObject(API.DRIVE3, ownerUser, 0, 0)
-        thirdPartyOwners[ownerUser] = ownerDrive
-      else:
-        ownerDrive = thirdPartyOwners[ownerUser]
-      if not ownerDrive:
         return
       targetPreviousRole = childEntryInfo[u'targetPermission']
       if (childFileType == Ent.DRIVE_FOLDER) and (targetPreviousRole[u'role'] == u'none') and (ownerRetainRoleBody[u'role'] == u'none'):
@@ -27656,12 +27674,7 @@ def transferDrive(users):
       except (GAPI.serviceNotAvailable, GAPI.authError, GAPI.domainPolicy) as e:
         userSvcNotApplicableOrDriveDisabled(sourceUser, str(e), i, count)
     else:
-      ownerUser = childEntryInfo[u'owners'][0][u'emailAddress']
-      if ownerUser not in thirdPartyOwners:
-        _, ownerDrive = buildGAPIServiceObject(API.DRIVE3, ownerUser, 0, 0)
-        thirdPartyOwners[ownerUser] = ownerDrive
-      else:
-        ownerDrive = thirdPartyOwners[ownerUser]
+      ownerUser, ownerDrive = _getOwnerUser(childEntryInfo)
       if not ownerDrive:
         return
       if nonOwnerRetainRoleBody[u'role'] == u'current':
@@ -27738,12 +27751,7 @@ def transferDrive(users):
       if not childEntry or childFileId in filesTransferred:
         continue
       if not childEntry[u'info'][u'ownedByMe']:
-        ownerUser = childEntry[u'info'][u'owners'][0][u'emailAddress']
-        if ownerUser not in thirdPartyOwners:
-          _, ownerDrive = buildGAPIServiceObject(API.DRIVE3, ownerUser, 0, 0)
-          thirdPartyOwners[ownerUser] = ownerDrive
-        else:
-          ownerDrive = thirdPartyOwners[ownerUser]
+        _, ownerDrive = _getOwnerUser(childEntry)
         if not ownerDrive:
           return
         try:
@@ -27813,12 +27821,7 @@ def transferDrive(users):
         childId = childEntry[u'id']
         fileTree[fileId][u'children'].append(childId)
         if not childEntry[u'ownedByMe']:
-          ownerUser = childEntry[u'owners'][0][u'emailAddress']
-          if ownerUser not in thirdPartyOwners:
-            _, ownerDrive = buildGAPIServiceObject(API.DRIVE3, ownerUser, 0, 0)
-            thirdPartyOwners[ownerUser] = ownerDrive
-          else:
-            ownerDrive = thirdPartyOwners[ownerUser]
+          _, ownerDrive = _getOwnerUser(childEntry)
           if not ownerDrive:
             continue
           try:
@@ -33869,12 +33872,12 @@ def _createUpdateSendAs(users, addCmd):
       kwargs[u'body'][u'signature'] = _processSignature(tagReplacements, signature, html)
     _processSendAs(user, i, count, Ent.SENDAS_ADDRESS, emailAddress, i, count, gmail, [u'patch', u'create'][addCmd], False, **kwargs)
 
-# gam <UserTypeEntity> [create|add] sendas <EmailAddress> <String> [signature|sig <String>|(file <FileName> [charset <CharSet>]) (replace <RegularExpression> <String>)*]
+# gam <UserTypeEntity> [create|add] sendas <EmailAddress> <String> [signature|sig <String>|(file <FileName> [charset <CharSet>]) (replace <Tag> <String>)*]
 #	[html [<Boolean>]] [replyto <EmailAddress>] [default] [treatasalias <Boolean>]
 def createSendAs(users):
   _createUpdateSendAs(users, True)
 
-# gam <UserTypeEntity> update sendas <EmailAddress> [name <String>] [signature|sig <String>|(file <FileName> [charset <CharSet>]) (replace <RegularExpression> <String>)*]
+# gam <UserTypeEntity> update sendas <EmailAddress> [name <String>] [signature|sig <String>|(file <FileName> [charset <CharSet>]) (replace <Tag> <String>)*]
 #	[html [<Boolean>]] [replyto <EmailAddress>] [default] [treatasalias <Boolean>]
 def updateSendAs(users):
   _createUpdateSendAs(users, False)
@@ -34198,7 +34201,7 @@ def printSmimes(users):
 def showSmimes(users):
   _printShowSmimes(users, False)
 
-# gam <UserTypeEntity> signature|sig <String>|(file <FileName> [charset <CharSet>]) (replace <RegularExpression> <String>)*
+# gam <UserTypeEntity> signature|sig <String>|(file <FileName> [charset <CharSet>]) (replace <Tag> <String>)*
 #	[html [<Boolean>]] [name <String>] [replyto <EmailAddress>] [default] [primary] [treatasalias <Boolean>]
 def setSignature(users):
   tagReplacements = _initTagReplacements()
@@ -34318,7 +34321,7 @@ def _showVacation(user, i, count, result, formatReply):
   Ind.Decrement()
 
 # gam <UserTypeEntity> vacation <FalseValues>
-# gam <UserTypeEntity> vacation <TrueValues> subject <String> (message <String>)|(file <FileName> [charset <CharSet>]) (replace <RegularExpression> <String>)*
+# gam <UserTypeEntity> vacation <TrueValues> subject <String> (message <String>)|(file <FileName> [charset <CharSet>]) (replace <Tag> <String>)*
 #	[html [<Boolean>]] [contactsonly [<Boolean>]] [domainonly [<Boolean>]] [startdate <Date>|Started] [enddate <Date>|NotSpecified]
 def setVacation(users):
   enable = getBoolean(None)
@@ -35503,14 +35506,14 @@ def ProcessGAMCommand(args, processGamCfg=True):
     closeSTDFilesIfNotMultiprocessing()
   return GM.Globals[GM.SYSEXITRC]
 
-# gam loop <FileName>|- [charset <String>] [columndelimiter <Character>] [quotechar <Character>] [fields <FieldNameList>] (matchfield <FieldName> <RegularExpression>)* gam <GAM argument list>
+# gam loop <FileName>|- [charset <String>] [columndelimiter <Character>] [quotechar <Character>] [fields <FieldNameList>] (matchfield|skipfield <FieldName> <RegularExpression>)* gam <GAM argument list>
 def doLoop():
   filename = getString(Cmd.OB_FILE_NAME)
   if (filename == u'-') and (GC.Values[GC.DEBUG_LEVEL] > 0):
     Cmd.Backup()
     usageErrorExit(Msg.BATCH_CSV_LOOP_DASH_DEBUG_INCOMPATIBLE.format(Cmd.LOOP_CMD))
   f, csvFile = openCSVFileReader(filename)
-  matchFields = getMatchFields(csvFile.fieldnames)
+  matchFields, skipFields = getMatchSkipFields(csvFile.fieldnames)
   checkArgumentPresent(Cmd.GAM_CMD, required=True)
   if not Cmd.ArgumentsRemaining():
     missingArgumentExit(Cmd.OB_GAM_ARGUMENT_LIST)
@@ -35530,7 +35533,7 @@ def doLoop():
     mpQueue = None
   GM.Globals[GM.CSVFILE][GM.REDIRECT_QUEUE] = mpQueue
   for row in csvFile:
-    if (not matchFields) or checkMatchFields(row, matchFields):
+    if checkMatchSkipFields(row, matchFields, skipFields):
       ProcessGAMCommand(processSubFields(GAM_argv, row, subFields), processGamCfg=processGamCfg)
       if (GM.Globals[GM.SYSEXITRC] > 0) and (GM.Globals[GM.SYSEXITRC] <= HARD_ERROR_RC):
         break
