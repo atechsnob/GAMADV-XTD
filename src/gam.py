@@ -27659,7 +27659,7 @@ def moveDriveFile(users):
           try:
             result = callGAPI(drive.files(), u'update',
                               throw_reasons=GAPI.DRIVE_ACCESS_THROW_REASONS+[GAPI.BAD_REQUEST,
-                                                                             GAPI.FILE_OWNER_NOT_MEMBER_OF_TEAM_DRIVE,,
+                                                                             GAPI.FILE_OWNER_NOT_MEMBER_OF_TEAM_DRIVE,
                                                                              GAPI.FILE_OWNER_NOT_MEMBER_OF_WRITER_DOMAIN,
                                                                              GAPI.CANNOT_MOVE_TRASHED_ITEM_INTO_TEAM_DRIVE],
                               fileId=childId, addParents=newFolderId, removeParents=folderId,
