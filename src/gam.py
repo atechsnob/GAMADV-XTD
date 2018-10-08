@@ -22,7 +22,7 @@ For more information, see https://github.com/taers232c/GAMADV-XTD
 """
 
 __author__ = u'Ross Scroggs <ross.scroggs@gmail.com>'
-__version__ = u'4.61.11'
+__version__ = u'4.61.12'
 __license__ = u'Apache License 2.0 (http://www.apache.org/licenses/LICENSE-2.0)'
 
 import sys
@@ -8552,7 +8552,7 @@ def _batchMoveCrOSesToOrgUnit(cd, orgUnitPath, i, count, items, quickCrOSMove):
         dbatch = cd.new_batch_http_request(callback=_callbackMoveCrOSesToOrgUnit)
         bcount = 0
     if bcount > 0:
-      executeBatch(dbatch)
+      dbatch.execute()
   else:
     bcount = 0
     j = 0
@@ -8605,7 +8605,7 @@ def _batchMoveUsersToOrgUnit(cd, orgUnitPath, i, count, items):
       dbatch = cd.new_batch_http_request(callback=_callbackMoveUsersToOrgUnit)
       bcount = 0
   if bcount > 0:
-    executeBatch(dbatch)
+    dbatch.execute()
   Ind.Decrement()
 
 def _doUpdateOrgs(entityList):
@@ -8890,7 +8890,7 @@ def _getOrgUnits(cd, orgUnitPath, fieldsList, listType, showParent, batchSubOrgs
         dbatch = cd.new_batch_http_request(callback=_callbackListOrgUnits)
         bcount = 0
     if bcount > 0:
-      executeBatch(dbatch)
+      dbatch.execute()
 
   deleteOrgUnitId = deleteParentOrgUnitId = False
   if showParent:
@@ -12524,7 +12524,7 @@ def doPrintCrOSDevices(entityList=None):
             dbatch = cd.new_batch_http_request(callback=_callbackPrintCrOS)
             bcount = 0
         if bcount > 0:
-          executeBatch(dbatch)
+          dbatch.execute()
 # Minimize quota usage by downloading all CrOS devices and only printing the selected ones
       else:
         entitySet = set(entityList)
@@ -12757,7 +12757,7 @@ def doPrintCrOSActivity(entityList=None):
           dbatch = cd.new_batch_http_request(callback=_callbackPrintCrOS)
           bcount = 0
       if bcount > 0:
-        executeBatch(dbatch)
+        dbatch.execute()
 # Minimize quota usage by downloading all CrOS devices and only printing the selected ones
     else:
       entitySet = set(entityList)
@@ -13316,20 +13316,19 @@ def checkGroupExists(cd, group, i=0, count=0):
 UPDATE_GROUP_SUBCMDS = [u'add', u'create', u'delete', u'remove', u'clear', u'sync', u'update']
 
 # gam update groups <GroupEntity> [admincreated <Boolean>] [email <EmailAddress>] [copyfrom <GroupItem>] <GroupAttributes>
-# gam update groups <GroupEntity> create|add [member|manager|owner] [usersonly|groupsonly] [notsuspended|suspended] <UserTypeEntity>
-# gam update groups <GroupEntity> delete|remove [member|manager|owner] [usersonly|groupsonly] [notsuspended|suspended] <UserTypeEntity>
-# gam update groups <GroupEntity> sync [member|manager|owner] [usersonly|groupsonly] [addonly|removeonly] [notsuspended|suspended] <UserTypeEntity>
-# gam update groups <GroupEntity> update [member|manager|owner] [usersonly|groupsonly] [notsuspended|suspended] <UserTypeEntity>
-# gam update groups <GroupEntity> clear [member] [manager] [owner] [notsuspended|suspended]
+# gam update groups <GroupEntity> create|add [member|manager|owner] [usersonly|groupsonly] [notsuspended|suspended] [preview] <UserTypeEntity>
+# gam update groups <GroupEntity> delete|remove [member|manager|owner] [usersonly|groupsonly] [notsuspended|suspended] [preview] <UserTypeEntity>
+# gam update groups <GroupEntity> sync [member|manager|owner] [usersonly|groupsonly] [addonly|removeonly] [notsuspended|suspended] [preview] <UserTypeEntity>
+# gam update groups <GroupEntity> update [member|manager|owner] [usersonly|groupsonly] [notsuspended|suspended] [preview] <UserTypeEntity>
+# gam update groups <GroupEntity> clear [member] [manager] [owner] [notsuspended|suspended] [preview]
 def doUpdateGroups():
-
-# Convert foo@googlemail.com to foo@gmail.com; eliminate periods in name for foo.bar@gmail.com
 
   def _getRoleGroupMemberType():
     role = getChoice(GROUP_ROLES_MAP, defaultChoice=Ent.ROLE_MEMBER, mapChoice=True)
     groupMemberType = getChoice({u'usersonly': u'USER', 'groupsonly': u'GROUP'}, defaultChoice=u'ALL', mapChoice=True)
     return (role, groupMemberType)
 
+# Convert foo@googlemail.com to foo@gmail.com; eliminate periods in name for foo.bar@gmail.com
   def _cleanConsumerAddress(emailAddress, mapCleanToOriginal):
     atLoc = emailAddress.find(u'@')
     if atLoc > 0:
@@ -13339,6 +13338,14 @@ def doUpdateGroups():
           mapCleanToOriginal[cleanEmailAddress] = emailAddress
           return cleanEmailAddress
     return emailAddress
+
+  def _previewAction(group, members, role, jcount):
+    Ind.Increment()
+    j = 0
+    for member in members:
+      j += 1
+      entityActionPerformed([Ent.GROUP, group, role, normalizeEmailAddressOrUID(member, checkForCustomerId=True)], j, jcount)
+    Ind.Decrement()
 
   _ADD_MEMBER_REASON_TO_MESSAGE_MAP = {GAPI.DUPLICATE: Msg.DUPLICATE,
                                        GAPI.CONDITION_NOT_MET: Msg.DUPLICATE,
@@ -13397,10 +13404,13 @@ def doUpdateGroups():
         entityActionFailedWarning([Ent.GROUP, ri[RI_ENTITY], ri[RI_ROLE], ri[RI_ITEM]], errMsg, int(ri[RI_J]), int(ri[RI_JCOUNT]))
 
   def _batchAddGroupMembers(group, i, count, addMembers, role):
-    Act.Set(Act.ADD)
+    Act.Set([Act.ADD, Act.ADD_PREVIEW][preview])
     jcount = len(addMembers)
     entityPerformActionNumItems([Ent.GROUP, group], jcount, role, i, count)
     if jcount == 0:
+      return
+    if preview:
+      _previewAction(group, addMembers, role, jcount)
       return
     Ind.Increment()
     svcargs = dict([(u'groupKey', group), (u'body', {u'role': role}), (u'fields', u'')]+GM.Globals[GM.EXTRA_ARGS_LIST])
@@ -13425,7 +13435,7 @@ def doUpdateGroups():
         dbatch = cd.new_batch_http_request(callback=_callbackAddGroupMembers)
         bcount = 0
     if bcount > 0:
-      executeBatch(dbatch)
+      dbatch.execute()
     Ind.Decrement()
 
   _REMOVE_MEMBER_REASON_TO_MESSAGE_MAP = {GAPI.MEMBER_NOT_FOUND: u'{0} {1}'.format(Msg.NOT_A, Ent.Singular(Ent.MEMBER)),
@@ -13455,16 +13465,18 @@ def doUpdateGroups():
           entityActionFailedWarning([Ent.GROUP, ri[RI_ENTITY], ri[RI_ROLE], ri[RI_ITEM]], str(e), int(ri[RI_J]), int(ri[RI_JCOUNT]))
 
   def _batchRemoveGroupMembers(group, i, count, removeMembers, role):
-    Act.Set(Act.REMOVE)
-    svcargs = dict([(u'groupKey', group), (u'memberKey', None)]+GM.Globals[GM.EXTRA_ARGS_LIST])
+    Act.Set([Act.REMOVE, Act.REMOVE_PREVIEW][preview])
     jcount = len(removeMembers)
     entityPerformActionNumItems([Ent.GROUP, group], jcount, role, i, count)
     if jcount == 0:
       return
-    Ind.Increment()
+    if preview:
+      _previewAction(group, removeMembers, role, jcount)
+    svcargs = dict([(u'groupKey', group), (u'memberKey', None)]+GM.Globals[GM.EXTRA_ARGS_LIST])
     method = getattr(cd.members(), u'delete')
     dbatch = cd.new_batch_http_request(callback=_callbackRemoveGroupMembers)
     bcount = 0
+    Ind.Increment()
     j = 0
     for member in removeMembers:
       j += 1
@@ -13477,7 +13489,7 @@ def doUpdateGroups():
         dbatch = cd.new_batch_http_request(callback=_callbackRemoveGroupMembers)
         bcount = 0
     if bcount > 0:
-      executeBatch(dbatch)
+      dbatch.execute()
     Ind.Decrement()
 
   _UPDATE_MEMBER_REASON_TO_MESSAGE_MAP = {GAPI.MEMBER_NOT_FOUND: u'{0} {1}'.format(Msg.NOT_A, Ent.Singular(Ent.MEMBER)),
@@ -13496,16 +13508,19 @@ def doUpdateGroups():
         entityActionFailedWarning([Ent.GROUP, ri[RI_ENTITY], ri[RI_ROLE], ri[RI_ITEM]], errMsg, int(ri[RI_J]), int(ri[RI_JCOUNT]))
 
   def _batchUpdateGroupMembers(group, i, count, updateMembers, role):
-    Act.Set(Act.UPDATE)
-    svcargs = dict([(u'groupKey', group), (u'memberKey', None), (u'body', {u'role': role}), (u'fields', u'')]+GM.Globals[GM.EXTRA_ARGS_LIST])
+    Act.Set([Act.UPDATE, Act.UPDATE_PREVIEW][preview])
     jcount = len(updateMembers)
     entityPerformActionNumItems([Ent.GROUP, group], jcount, role, i, count)
     if jcount == 0:
       return
-    Ind.Increment()
-    method = getattr(cd.members(), u'update')
+    if preview:
+      _previewAction(group, updateMembers, role, jcount)
+      return
+    svcargs = dict([(u'groupKey', group), (u'memberKey', None), (u'body', {u'role': role}), (u'fields', u'')]+GM.Globals[GM.EXTRA_ARGS_LIST])
+    method = getattr(cd.members(), u'patch')
     dbatch = cd.new_batch_http_request(callback=_callbackUpdateGroupMembers)
     bcount = 0
+    Ind.Increment()
     j = 0
     for member in updateMembers:
       j += 1
@@ -13518,10 +13533,11 @@ def doUpdateGroups():
         dbatch = cd.new_batch_http_request(callback=_callbackUpdateGroupMembers)
         bcount = 0
     if bcount > 0:
-      executeBatch(dbatch)
+      dbatch.execute()
     Ind.Decrement()
 
   cd = buildGAPIObject(API.DIRECTORY)
+  preview = False
   entityList = getEntityList(Cmd.OB_GROUP_ENTITY)
   CL_subCommand = getChoice(UPDATE_GROUP_SUBCMDS, defaultChoice=None)
   if not CL_subCommand:
@@ -13587,6 +13603,7 @@ def doUpdateGroups():
   elif CL_subCommand in [u'create', u'add']:
     role, groupMemberType = _getRoleGroupMemberType()
     isSuspended = _getOptionalIsSuspended()
+    preview = checkArgumentPresent(u'preview')
     _, addMembers = getEntityToModify(defaultEntityType=Cmd.ENTITY_USERS, isSuspended=isSuspended, groupMemberType=groupMemberType)
     groupMemberLists = addMembers if isinstance(addMembers, dict) else None
     checkForExtraneousArguments()
@@ -13602,6 +13619,7 @@ def doUpdateGroups():
   elif CL_subCommand in [u'delete', u'remove']:
     role, groupMemberType = _getRoleGroupMemberType()
     isSuspended = _getOptionalIsSuspended()
+    preview = checkArgumentPresent(u'preview')
     _, removeMembers = getEntityToModify(defaultEntityType=Cmd.ENTITY_USERS, isSuspended=isSuspended, groupMemberType=groupMemberType)
     groupMemberLists = removeMembers if isinstance(removeMembers, dict) else None
     checkForExtraneousArguments()
@@ -13618,6 +13636,7 @@ def doUpdateGroups():
     role, groupMemberType = _getRoleGroupMemberType()
     syncOperation = getChoice([u'addonly', 'removeonly'], defaultChoice=u'addremove')
     isSuspended = _getOptionalIsSuspended()
+    preview = checkArgumentPresent(u'preview')
     _, syncMembers = getEntityToModify(defaultEntityType=Cmd.ENTITY_USERS, isSuspended=isSuspended, groupMemberType=groupMemberType)
     groupMemberLists = syncMembers if isinstance(syncMembers, dict) else None
     if not groupMemberLists:
@@ -13641,17 +13660,18 @@ def doUpdateGroups():
         currentMembersMap = {}
         for member in getUsersToModify(Cmd.ENTITY_GROUP, group, memberRoles=role, groupMemberType=groupMemberType):
           currentMembersSet.add(_cleanConsumerAddress(member, currentMembersMap))
-        if syncOperation != u'removeonly':
-          _batchAddGroupMembers(group, i, count,
-                                [syncMembersMap.get(emailAddress, emailAddress) for emailAddress in syncMembersSet-currentMembersSet],
-                                role)
         if syncOperation != u'addonly':
           _batchRemoveGroupMembers(group, i, count,
                                    [currentMembersMap.get(emailAddress, emailAddress) for emailAddress in currentMembersSet-syncMembersSet],
                                    role)
+        if syncOperation != u'removeonly':
+          _batchAddGroupMembers(group, i, count,
+                                [syncMembersMap.get(emailAddress, emailAddress) for emailAddress in syncMembersSet-currentMembersSet],
+                                role)
   elif CL_subCommand == u'update':
     role, groupMemberType = _getRoleGroupMemberType()
     isSuspended = _getOptionalIsSuspended()
+    preview = checkArgumentPresent(u'preview')
     _, updateMembers = getEntityToModify(defaultEntityType=Cmd.ENTITY_USERS, isSuspended=isSuspended, groupMemberType=groupMemberType)
     groupMemberLists = updateMembers if isinstance(updateMembers, dict) else None
     checkForExtraneousArguments()
@@ -13675,6 +13695,8 @@ def doUpdateGroups():
         rolesSet.add(GROUP_ROLES_MAP[myarg])
       elif myarg in SUSPENDED_ARGUMENTS:
         isSuspended = _getIsSuspended(myarg)
+      elif myarg == u'preview':
+        preview = True
       else:
         unknownArgumentExit()
     if isSuspended is not None:
@@ -14348,7 +14370,7 @@ def doPrintGroups():
         cdbatch = cd.new_batch_http_request(callback=_callbackProcessGroupBasic)
         cdbcount = 0
     if cdbcount > 0:
-      executeBatch(cdbatch)
+      cdbatch.execute()
   required = 0
   if memberRoles:
     required += 1
@@ -14402,9 +14424,9 @@ def doPrintGroups():
         groupData[i][u'settings'] = False
         groupData[i][u'required'] -= 1
   if cdbcount > 0:
-    executeBatch(cdbatch)
+    cdbatch.execute()
   if getSettings and gsbcount > 0:
-    executeBatch(gsbatch)
+    gsbatch.execute()
   _writeCompleteRows()
   writeCSVfile(csvRows, titles, u'Groups', todrive, [fieldsTitles[u'email']] if sortHeaders else None, quotechar)
 
@@ -20138,7 +20160,7 @@ def infoUsers(entityList):
           svcparms[u'userId'] = user[u'primaryEmail']
           svcparms[u'productId'], svcparms[u'skuId'] = SKU.getProductAndSKU(skuId)
           dbatch.add(method(**svcparms))
-        executeBatch(dbatch)
+        dbatch.execute()
       if formatJSON:
         if getGroups:
           user[u'groups'] = groups
@@ -20645,7 +20667,7 @@ def doPrintUsers(entityList=None):
             dbatch = cd.new_batch_http_request(callback=_callbackPrintUser)
             bcount = 0
         if bcount > 0:
-          executeBatch(dbatch)
+          dbatch.execute()
 # Minimize quota usage by downloading all users and only printing the selected ones
       else:
         entitySet = set(entityList)
@@ -22879,7 +22901,7 @@ def _batchAddParticipantsToCourse(croom, courseId, i, count, addParticipants, ro
       dbatch = croom.new_batch_http_request(callback=_callbackAddParticipantsToCourse)
       bcount = 0
   if bcount > 0:
-    executeBatch(dbatch)
+    dbatch.execute()
   Ind.Decrement()
 
 def _batchRemoveParticipantsFromCourse(croom, courseId, i, count, removeParticipants, role):
@@ -22931,7 +22953,7 @@ def _batchRemoveParticipantsFromCourse(croom, courseId, i, count, removeParticip
       dbatch = croom.new_batch_http_request(callback=_callbackRemoveParticipantsFromCourse)
       bcount = 0
   if bcount > 0:
-    executeBatch(dbatch)
+    dbatch.execute()
   Ind.Decrement()
 
 ADD_REMOVE_PARTICIPANT_TYPES_MAP = {
@@ -30573,7 +30595,7 @@ def _createDriveFilePermissions(users, useDomainAdminAccess):
           dbatch = drive.new_batch_http_request(callback=_callbackCreatePermission)
           bcount = 0
     if bcount > 0:
-      executeBatch(dbatch)
+      dbatch.execute()
     Ind.Decrement()
 
 # gam <UserTypeEntity> create|add permissions <DriveFileEntity> <DriveFilePermissionsEntity> [adminaccess|asadmin] [expiration <Time>] [sendmail] [emailmessage <String>]
@@ -30731,7 +30753,7 @@ def _deletePermissions(users, useDomainAdminAccess):
           dbatch = drive.new_batch_http_request(callback=_callbackDeletePermissionId)
           bcount = 0
     if bcount > 0:
-      executeBatch(dbatch)
+      dbatch.execute()
     Ind.Decrement()
 
 # gam <UserTypeEntity> delete permissions <DriveFileEntity> <DriveFilePermissionIDEntity> [adminaccess|asadmin]
@@ -31675,7 +31697,7 @@ def addUserToGroups(users):
         dbatch = cd.new_batch_http_request(callback=_callbackAddUserToGroups)
         bcount = 0
     if bcount > 0:
-      executeBatch(dbatch)
+      dbatch.execute()
     Ind.Decrement()
 
   cd = buildGAPIObject(API.DIRECTORY)
@@ -31732,7 +31754,7 @@ def deleteUserFromGroups(users):
         dbatch = cd.new_batch_http_request(callback=_callbackDeleteUserFromGroups)
         bcount = 0
     if bcount > 0:
-      executeBatch(dbatch)
+      dbatch.execute()
     Ind.Decrement()
 
   cd = buildGAPIObject(API.DIRECTORY)
@@ -33176,7 +33198,7 @@ def deleteLabel(users):
           dbatch = gmail.new_batch_http_request(callback=_callbackDeleteLabel)
           bcount = 0
       if bcount > 0:
-        executeBatch(dbatch)
+        dbatch.execute()
       Ind.Decrement()
     except (GAPI.serviceNotAvailable, GAPI.badRequest):
       entityServiceNotApplicableWarning(Ent.USER, user, i, count)
@@ -33574,7 +33596,7 @@ def _processMessagesThreads(users, entityType):
         dbatch = gmail.new_batch_http_request(callback=_callbackProcessMessage)
         bcount = 0
     if bcount > 0:
-      executeBatch(dbatch)
+      dbatch.execute()
 
   parameters = _initMessageThreadParameters(entityType, False, 1)
   includeSpamTrash = False
@@ -34186,7 +34208,7 @@ def _printShowMessagesThreads(users, entityType, csvFormat):
         dbatch = gmail.new_batch_http_request(callback=callback)
         bcount = 0
     if bcount > 0:
-      executeBatch(dbatch)
+      dbatch.execute()
 
   parameters = _initMessageThreadParameters(entityType, True, 0)
   includeSpamTrash = False
