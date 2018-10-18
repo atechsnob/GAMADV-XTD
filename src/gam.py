@@ -29062,7 +29062,7 @@ def moveDriveFile(users):
         if movedFiles.get(childId):
           continue
         trashed = child.pop(u'trashed', False)
-        if (childId == newFolderId) or (destTeamDriveId and trashed]):
+        if (childId == newFolderId) or (destTeamDriveId and trashed):
           entityActionNotPerformedWarning([Ent.USER, user, _getEntityMimeType(child), childTitle],
                                           [Msg.NOT_MOVABLE, Msg.NOT_MOVABLE_IN_TRASH][trashed], k, kcount)
           _incrStatistic(statistics, STAT_FILE_NOT_COPYABLE_MOVABLE)
