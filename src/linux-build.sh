@@ -7,7 +7,6 @@ export LD_LIBRARY_PATH=/usr/local/lib
 pyinstaller --clean -F --distpath=gamadv-xtd linux-gam.spec
 cp LICENSE gamadv-xtd
 cp license.rtf gamadv-xtd
-cp whatsnew.txt gamadv-xtd
 cp Gam*.txt gamadv-xtd
 cp cacerts.pem gamadv-xtd
 

@@ -13,7 +13,6 @@ set WIXVERSION=3.11
 c:\python27-32\scripts\pyinstaller --clean -F --distpath=gamadv-xtd windows-gam.spec
 xcopy LICENSE gamadv-xtd\
 xcopy license.rtf gamadv-xtd\
-xcopy whatsnew.txt gamadv-xtd\
 xcopy gam-setup.bat gamadv-xtd\
 xcopy Gam*.txt gamadv-xtd\
 xcopy cacerts.pem gamadv-xtd\
@@ -23,7 +22,6 @@ del gamadv-xtd\w9xpopen.exe
 c:\python27-64\scripts\pyinstaller --clean -F --distpath=gamadv-xtd-64 windows-gam.spec
 xcopy LICENSE gamadv-xtd-64\
 xcopy license.rtf gamadv-xtd-64\
-xcopy whatsnew.txt gamadv-xtd-64\
 xcopy gam-setup.bat gamadv-xtd-64\
 xcopy Gam*.txt gamadv-xtd-64\
 xcopy cacerts.pem gamadv-xtd-64\
