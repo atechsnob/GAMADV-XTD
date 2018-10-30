@@ -22,7 +22,7 @@ For more information, see https://github.com/taers232c/GAMADV-XTD
 """
 
 __author__ = u'Ross Scroggs <ross.scroggs@gmail.com>'
-__version__ = u'4.61.25'
+__version__ = u'4.65.00'
 __license__ = u'Apache License 2.0 (http://www.apache.org/licenses/LICENSE-2.0)'
 
 import sys
@@ -3702,7 +3702,7 @@ def getUsersToModify(entityType, entity, memberRoles=None, isSuspended=None, inc
     entityError[u'invalid'] += 1
     printErrorMessage(INVALID_ENTITY_RC, formatKeyValueList(u'', [Ent.Singular(entityType), entityName, Msg.INVALID], u''))
 
-  def _addGroupMembersToUsers(group, domains, recursive):
+  def _addGroupUsersToUsers(group, domains, recursive):
     printGettingAllEntityItemsForWhom(memberRoles if memberRoles else Ent.ROLE_MANAGER_MEMBER_OWNER, group, entityType=Ent.GROUP)
     validRoles, listRoles, listFields = _getRoleVerification(memberRoles, u'nextPageToken,members(email,type,status)')
     try:
@@ -3727,7 +3727,7 @@ def getUsersToModify(entityType, entity, memberRoles=None, isSuspended=None, inc
           entitySet.add(email)
           entityList.append(email)
       elif recursive and member[u'type'] == u'GROUP':
-        _addGroupMembersToUsers(member[u'email'], domains, recursive)
+        _addGroupUsersToUsers(member[u'email'], domains, recursive)
 
   entityError = {u'entityType': None, u'doesNotExist': 0, u'invalid': 0}
   entityList = []
@@ -3815,7 +3815,7 @@ def getUsersToModify(entityType, entity, memberRoles=None, isSuspended=None, inc
       memberRoles = u','.join(sorted(rolesSet))
     for group in groups:
       if validateEmailAddressOrUID(group):
-        _addGroupMembersToUsers(normalizeEmailAddressOrUID(group), domains, recursive)
+        _addGroupUsersToUsers(normalizeEmailAddressOrUID(group), domains, recursive)
       else:
         _showInvalidEntity(Ent.GROUP, group)
   elif entityType in [Cmd.ENTITY_OU, Cmd.ENTITY_OUS, Cmd.ENTITY_OU_AND_CHILDREN, Cmd.ENTITY_OUS_AND_CHILDREN,
@@ -4234,7 +4234,8 @@ def getEntityArgument(entityList):
     Cmd.SetLocation(clLoc)
   return (0, len(entityList), entityList)
 
-def getEntityToModify(defaultEntityType=None, returnOnError=False, crosAllowed=False, userAllowed=True, typeMap=None, isSuspended=None, groupMemberType=u'USER', delayGet=False):
+def getEntityToModify(defaultEntityType=None, returnOnError=False, crosAllowed=False, userAllowed=True,
+                      typeMap=None, isSuspended=None, groupMemberType=u'USER', delayGet=False):
   selectorChoices = Cmd.BASE_ENTITY_SELECTORS[:]
   if userAllowed:
     selectorChoices += Cmd.USER_ENTITY_SELECTORS+Cmd.USER_CSVDATA_ENTITY_SELECTORS
@@ -10636,7 +10637,7 @@ def normalizeContactId(contactId):
 
 def _initContactQueryAttributes():
   return {u'query': None, u'projection': u'full', u'url_params': {u'max-results': str(GC.Values[GC.CONTACT_MAX_RESULTS])},
-          u'contactGroup': None, u'group': None, u'emailMatchPattern': None, u'emailMatchType': None}
+          u'contactGroup': None, u'group': None, u'otherContacts': False, u'emailMatchPattern': None, u'emailMatchType': None}
 
 def _getContactQueryAttributes(contactQuery, myarg, entityType, errorOnUnknown, allowOutputAttributes):
   if myarg == u'query':
@@ -10644,6 +10645,13 @@ def _getContactQueryAttributes(contactQuery, myarg, entityType, errorOnUnknown, 
   elif myarg in [u'contactgroup', u'selectcontactgroup']:
     if entityType == Ent.USER:
       contactQuery[u'contactGroup'] = getString(Cmd.OB_CONTACT_GROUP_ITEM)
+      contactQuery[u'otherContacts'] = False
+    else:
+      unknownArgumentExit()
+  elif myarg in [u'othercontacts', u'selectothercontacts']:
+    if entityType == Ent.USER:
+      contactQuery[u'otherContacts'] = True
+      contactQuery[u'contactGroup'] = None
     else:
       unknownArgumentExit()
   elif myarg == u'emailmatchpattern':
@@ -10713,13 +10721,19 @@ def queryContacts(contactsObject, contactQuery, entityType, user, i=0, count=0):
     entityUnknownWarning(entityType, user, i, count)
   return None
 
-def contactEmailAddressMatches(contactsManager, contactQuery, fields):
-  emailMatchType = contactQuery[u'emailMatchType']
-  for item in fields.get(CONTACT_EMAILS, []):
-    if contactQuery[u'emailMatchPattern'].match(item[u'value']):
-      if not emailMatchType or emailMatchType == item.get(u'label') or emailMatchType == contactsManager.CONTACT_ARRAY_PROPERTIES[CONTACT_EMAILS][u'relMap'].get(item[u'rel'], u'custom'):
-        return True
-  return False
+def localContactSelects(contactsManager, contactQuery, fields):
+  if contactQuery[u'otherContacts']:
+    if fields.get(CONTACT_GROUPS):
+      return False
+  if contactQuery[u'emailMatchPattern']:
+    emailMatchType = contactQuery[u'emailMatchType']
+    for item in fields.get(CONTACT_EMAILS, []):
+      if contactQuery[u'emailMatchPattern'].match(item[u'value']):
+        if not emailMatchType or emailMatchType == item.get(u'label') or emailMatchType == contactsManager.CONTACT_ARRAY_PROPERTIES[CONTACT_EMAILS][u'relMap'].get(item[u'rel'], u'custom'):
+          break
+    else:
+      return False
+  return True
 
 def clearEmailAddressMatches(contactsManager, contactClear, fields):
   savedAddresses = []
@@ -10834,12 +10848,15 @@ def _clearUpdateContacts(users, entityType, updateContacts):
     update_fields = contactsManager.GetContactFields(entityType)
   else:
     contactClear = {u'emailClearPattern': contactQuery[u'emailMatchPattern'], u'emailClearType': contactQuery[u'emailMatchType']}
+    deleteClearedContactsWithNoEmails = False
     while Cmd.ArgumentsRemaining():
       myarg = getArgument()
       if myarg == u'emailclearpattern':
         contactClear[u'emailClearPattern'] = getREPattern(re.IGNORECASE)
       elif myarg == u'emailcleartype':
         contactClear[u'emailClearType'] = getString(Cmd.OB_CONTACT_EMAIL_TYPE)
+      elif myarg == u'deleteclearedcontactswithnoemails':
+        deleteClearedContactsWithNoEmails = True
       else:
         unknownArgumentExit()
     if not contactClear[u'emailClearPattern']:
@@ -10884,9 +10901,8 @@ def _clearUpdateContacts(users, entityType, updateContacts):
         else:
           contactId = contactsManager.GetContactShortId(contact)
           fields = contactsManager.ContactToFields(contact)
-          if contactQuery[u'emailMatchPattern']:
-            if not contactEmailAddressMatches(contactsManager, contactQuery, fields):
-              continue
+          if not localContactSelects(contactsManager, contactQuery, fields):
+            continue
         if updateContacts:
           if update_fields.get(CONTACT_GROUPS_LIST) and not contactGroupsList:
             result, contactGroupsList = validateContactGroupsList(contactsManager, contactsObject, contactId, update_fields, entityType, user, i, count)
@@ -10902,11 +10918,19 @@ def _clearUpdateContacts(users, entityType, updateContacts):
         else:
           if not clearEmailAddressMatches(contactsManager, contactClear, fields):
             continue
+          if deleteClearedContactsWithNoEmails and not fields[CONTACT_EMAILS]:
+            Act.Set(Act.DELETE)
+            callGData(contactsObject, u'DeleteContact',
+                      throw_errors=[GDATA.NOT_FOUND, GDATA.SERVICE_NOT_APPLICABLE, GDATA.FORBIDDEN],
+                      edit_uri=contactsObject.GetContactFeedUri(contact_list=user, contactId=contactId), extra_headers={u'If-Match': contact.etag})
+            entityActionPerformed([entityType, user, Ent.CONTACT, contactId], j, jcount)
+            continue
           contactEntry = contactsManager.FieldsToContact(fields)
         contactEntry.category = contact.category
         contactEntry.link = contact.link
         contactEntry.etag = contact.etag
         contactEntry.id = contact.id
+        Act.Set(Act.UPDATE)
         callGData(contactsObject, u'UpdateContact',
                   throw_errors=[GDATA.NOT_FOUND, GDATA.BAD_REQUEST, GDATA.PRECONDITION_FAILED, GDATA.SERVICE_NOT_APPLICABLE, GDATA.FORBIDDEN],
                   edit_uri=contactsObject.GetContactFeedUri(contact_list=user, contactId=contactId), updated_contact=contactEntry, extra_headers={u'If-Match': contact.etag})
@@ -10929,11 +10953,15 @@ def updateUserContacts(users):
 def doUpdateDomainContacts():
   _clearUpdateContacts([GC.Values[GC.DOMAIN]], Ent.DOMAIN, True)
 
-# gam <UserTypeEntity> clear contacts <ContactEntity>|<UserContactSelection> [clearmatchpattern <RegularExpression>] [clearmatchtype work|home|other|<String>]
+# gam <UserTypeEntity> clear contacts <ContactEntity>|<UserContactSelection>
+#	[clearmatchpattern <RegularExpression>] [clearmatchtype work|home|other|<String>]
+#	[deleteclearedcontactswithnoemails]
 def clearUserContacts(users):
   _clearUpdateContacts(users, Ent.USER, False)
 
-# gam clear contacts <ContactEntity>|<ContactSelection> [clearmatchpattern <RegularExpression>] [clearmatchtype work|home|other|<String>]
+# gam clear contacts <ContactEntity>|<ContactSelection>
+#	[clearmatchpattern <RegularExpression>] [clearmatchtype work|home|other|<String>]
+#	[deleteclearedcontactswithnoemails]
 def doClearDomainContacts(users):
   _clearUpdateContacts(users, Ent.USER, False)
 
@@ -10978,7 +11006,7 @@ def _deleteContacts(users, entityType):
         else:
           contactId = contactsManager.GetContactShortId(contact)
           fields = contactsManager.ContactToFields(contact)
-          if contactQuery[u'emailMatchPattern'] and not contactEmailAddressMatches(contactsManager, contactQuery, fields):
+          if not localContactSelects(contactsManager, contactQuery, fields):
             continue
         callGData(contactsObject, u'DeleteContact',
                   throw_errors=[GDATA.NOT_FOUND, GDATA.SERVICE_NOT_APPLICABLE, GDATA.FORBIDDEN],
@@ -11212,7 +11240,7 @@ def _printShowContacts(users, entityType, csvFormat, contactFeed=True):
       for contact in contacts:
         j += 1
         fields = contactsManager.ContactToFields(contact)
-        if contactQuery[u'emailMatchPattern'] and not contactEmailAddressMatches(contactsManager, contactQuery, fields):
+        if not localContactSelects(contactsManager, contactQuery, fields):
           continue
         if showContactGroups and CONTACT_GROUPS in fields and not contactGroupIDs:
           contactGroupIDs, _ = getContactGroupsInfo(contactsManager, contactsObject, entityType, user, i, count)
@@ -11221,7 +11249,7 @@ def _printShowContacts(users, entityType, csvFormat, contactFeed=True):
     elif contacts:
       for contact in contacts:
         fields = contactsManager.ContactToFields(contact)
-        if contactQuery[u'emailMatchPattern'] and not contactEmailAddressMatches(contactsManager, contactQuery, fields):
+        if not localContactSelects(contactsManager, contactQuery, fields):
           continue
         if showContactGroups and CONTACT_GROUPS in fields and not contactGroupIDs:
           contactGroupIDs, _ = getContactGroupsInfo(contactsManager, contactsObject, entityType, user, i, count)
@@ -11405,7 +11433,7 @@ def _processContactPhotos(users, entityType, function):
         else:
           contactId = contactsManager.GetContactShortId(contact)
           fields = contactsManager.ContactToFields(contact)
-          if contactQuery[u'emailMatchPattern'] and not contactEmailAddressMatches(contactsManager, contactQuery, fields):
+          if not localContactSelects(contactsManager, contactQuery, fields):
             continue
       except (GDATA.notFound, GDATA.badRequest) as e:
         entityActionFailedWarning([entityType, user, Ent.CONTACT, contactId], str(e), j, jcount)
