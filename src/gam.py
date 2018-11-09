@@ -26770,6 +26770,7 @@ DRIVEFILE_FIELDS_CHOICE_MAP = {
   u'id': u'id',
   u'imagemediametadata': u'imageMediaMetadata',
   u'isappauthorized': u'isAppAuthorized',
+  u'labels': [u'modifiedByMe', u'copyRequiresWriterPermission', u'starred', u'trashed', u'viewedByMe',],
   u'lastmodifyinguser': u'lastModifyingUser',
   u'lastmodifyingusername': u'lastModifyingUser.displayName',
   u'lastviewedbyme': VX_VIEWED_BY_ME_TIME,
