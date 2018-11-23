@@ -35054,7 +35054,7 @@ def _printShowMessagesThreads(users, entityType, csvFormat):
     if show_snippet:
       printKeyValueList([u'Snippet', dehtml(result[u'snippet']).replace(u'\n', u' ')])
     for name in headersToShow:
-      for header in result[u'payload'][u'headers']:
+      for header in result[u'payload']get(u'headers', []):
         if name == header[u'name'].lower():
           printKeyValueList([SMTP_HEADERS_MAP.get(name, header[u'name']), _decodeHeader(header[u'value'])])
     if show_size:
@@ -35082,7 +35082,7 @@ def _printShowMessagesThreads(users, entityType, csvFormat):
       row[u'Snippet'] = dehtml(result[u'snippet']).replace(u'\n', u' ')
     for name in headersToShow:
       j = 0
-      for header in result[u'payload'][u'headers']:
+      for header in result[u'payload']get(u'headers', []):
         if name == header[u'name'].lower():
           j += 1
           if j == 1:
