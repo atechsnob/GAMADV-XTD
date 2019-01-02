@@ -6447,7 +6447,7 @@ REPORT_FULLDATA_APPS = [
 REPORT_ACTIVITIES_TIME_OBJECTS = set([u'time',])
 
 # gam report <users|user> [todrive <ToDriveAttributes>*] [date <Date>] [nodatechange | (fulldatarequired all|<ReportAppsList>)]
-#	[(user all|<UserItem>)|(select <UserTypeEntity>)] (filtertime.* <Time>)* [filter|filters <String>] [fields|parameters <String>]
+#	[(user all|<UserItem>)|(orgunit|org|ou <OrgUnitPath>)|(select <UserTypeEntity>)] [filtertime.* <Time>] [filter|filters <String>] [fields|parameters <String>]
 #	[maxactivities <Number>] [maxresults <Number>]
 # gam report <customers|customer|domain> [todrive <ToDriveAttributes>*] [date <Date>] [nodatechange | (fulldatarequired all|<ReportAppsList>)]
 #	[fields|parameters <String>]
