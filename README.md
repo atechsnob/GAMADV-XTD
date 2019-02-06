@@ -74,8 +74,8 @@ Enter the following gam commands and follow instructions to create the necessary
 - Authorize Gam Client: `gam oauth create`
 - Authorize Service Account: `gam user <EmailAddress> check serviceaccount`
 
-# Installation - Upgrading from a GAM version other than a prior version of GAMADV-XTD or GAMADV-X\
-Please see the HOW-TO-UPGRADE-FROM-GAM.md file for step-by-step instructions.
+# Installation - Upgrading from a GAM version other than a prior version of GAMADV-XTD or GAMADV-X
+Please see  https://github.com/taers232c/GAMADV-XTD/wiki/How-to-Upgrade-from-Standard-GAM file for step-by-step instructions.
 
 # Installation - Upgrading from a prior version of GAMADV-XTD or GAMADV-X
 Read GamUpdate.txt
