@@ -22,7 +22,7 @@ For more information, see https://github.com/taers232c/GAMADV-XTD
 """
 
 __author__ = u'Ross Scroggs <ross.scroggs@gmail.com>'
-__version__ = u'4.65.64'
+__version__ = u'4.65.65'
 __license__ = u'Apache License 2.0 (http://www.apache.org/licenses/LICENSE-2.0)'
 
 import base64
@@ -6829,7 +6829,7 @@ def doReport():
         break
     writeCSVfile(csvRows, titles, u'User Reports - {0}'.format(tryDate), todrive, [u'email', u'date'])
   elif report == u'customer':
-    titles, csvRows = initializeTitlesCSVfile([u'name', u'value', u'client_id'])
+    titles, csvRows = initializeTitlesCSVfile([u'date', u'name', u'value'])
     auth_apps = []
     while True:
       try:
@@ -6863,15 +6863,15 @@ def doReport():
         for ptype in REPORTS_PARAMETERS_SIMPLE_TYPES:
           if ptype in item:
             if ptype != u'datetimeValue':
-              csvRows.append({u'name': name, u'value': item[ptype]})
+              csvRows.append({u'date': tryDate, u'name': name, u'value': item[ptype]})
             else:
-              csvRows.append({u'name': name, u'value': formatLocalTime(item[ptype])})
+              csvRows.append({u'date': tryDate, u'name': name, u'value': formatLocalTime(item[ptype])})
             break
         else:
           if u'msgValue' in item:
             if name == u'accounts:authorized_apps':
               for subitem in item[u'msgValue']:
-                app = {}
+                app = {u'date': tryDate}
                 for an_item in subitem:
                   if an_item == u'client_name':
                     app[u'name'] = u'App: {0}'.format(escapeCRsNLs(subitem[an_item]))
@@ -6898,10 +6898,12 @@ def doReport():
                 else:
                   continue
                 value = u' '.join(sorted(values, reverse=True))
-              csvRows.append({u'name': name, u'value': value})
-      csvRows.sort(key=lambda k: k[u'name'])
-      for row in sorted(auth_apps, key=lambda k: k[u'name'].lower()):
-        csvRows.append(row)
+              csvRows.append({u'date': tryDate, u'name': name, u'value': value})
+      csvRows.sort(key=lambda k: (k[u'date'], k[u'name']))
+      if auth_apps:
+        addTitleToCSVfile(u'client_id', titles)
+        for row in sorted(auth_apps, key=lambda k: (k[u'date'], k[u'name'].lower())):
+          csvRows.append(row)
       break
     writeCSVfile(csvRows, titles, u'Customer Report - {0}'.format(tryDate), todrive)
   else:     # admin, calendar, drive, gplus, groups, login, mobile, rules, token
@@ -30139,7 +30141,9 @@ def copyDriveFile(users):
               if parentId not in newParents:
                 source[u'parents'].append(parentId)
           sourceId = source.pop(u'id')
+          source.pop(u'trashed', None)
           if copyMoveOptions[u'destTeamDriveId']:
+            source.pop(u'copyRequiresWriterPermission', None)
             source.pop(u'writersCanShare', None)
           source.update(copyBody)
           result = callGAPI(drive.files(), u'copy',
