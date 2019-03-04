@@ -22,7 +22,7 @@ For more information, see https://github.com/taers232c/GAMADV-XTD
 """
 
 __author__ = u'Ross Scroggs <ross.scroggs@gmail.com>'
-__version__ = u'4.65.66'
+__version__ = u'4.65.67'
 __license__ = u'Apache License 2.0 (http://www.apache.org/licenses/LICENSE-2.0)'
 
 import base64
@@ -28620,8 +28620,9 @@ class DriveListParameters(object):
   def __init__(self, mimeTypeInQuery=False, allowQuery=True):
     self.mimeTypeInQuery = mimeTypeInQuery
     self.query = ME_IN_OWNERS
-    self.filenameMatchPattern = None
     self.mimeTypeCheck = MimeTypeCheck()
+    self.minimumFileSize = None
+    self.filenameMatchPattern = None
     self.permissionMatches = []
     self.permissionMatchKeep = self.permissionMatchOr = True
     self.showOwnedBy = True
@@ -28701,6 +28702,8 @@ class DriveListParameters(object):
             self.query += u"mimeType != '{0}' and ".format(mimeType)
           self.query = self.query[:-5]
         self.query += u')'
+    elif myarg == u'minimumfilesize':
+      self.minimumFileSize = getInteger(minVal=0)
     elif myarg == u'filenamematchpattern':
       self.filenameMatchPattern = getREPattern(re.IGNORECASE)
     elif myarg in [u'pm', u'permissionmatch']:
@@ -28742,6 +28745,9 @@ class DriveListParameters(object):
 
   def CheckMimeType(self, fileInfo):
     return self.mimeTypeCheck.Check(fileInfo)
+
+  def CheckMinimumFileSize(self, fileInfo):
+    return self.minimumFileSize is None or int(fileInfo.get(VX_SIZE, u'0')) >= self.minimumFileSize
 
   def CheckFilenameMatch(self, fileInfo):
     return not self.filenameMatchPattern or self.filenameMatchPattern.match(fileInfo[VX_FILENAME])
@@ -28812,6 +28818,10 @@ def printFileList(users):
       if u'mimeType' not in fieldsList:
         skipObjects.add(u'mimeType')
         fieldsList.append(u'mimeType')
+    if DLP.minimumFileSize is not None:
+      if VX_SIZE not in fieldsList:
+        skipObjects.add(VX_SIZE)
+        fieldsList.append(VX_SIZE)
     if DLP.filenameMatchPattern:
       if VX_FILENAME not in fieldsList:
         skipObjects.add(VX_FILENAME)
@@ -28826,6 +28836,7 @@ def printFileList(users):
   def _printFileInfo(drive, user, f_file):
     if (not DLP.CheckShowOwnedBy(f_file) or
         not DLP.CheckMimeType(f_file) or
+        not DLP.CheckMinimumFileSize(f_file) or
         not DLP.CheckFilenameMatch(f_file) or
         (u'permissions' in f_file and not DLP.CheckPermissonMatches(f_file)) or
         (onlyTeamDrives and not f_file.get(u'teamDriveId'))):
