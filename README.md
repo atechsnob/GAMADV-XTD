@@ -36,10 +36,15 @@ To run all commands properly, GAMADV-XTD requires three things:
 You can download the current GAMADV-XTD release from the [GitHub Releases](https://github.com/taers232c/GAMADV-XTD/releases) page. Choose one of the following:
 
 * Single Executable Archive, Automatic, Linux/Mac OS/Google Cloud Shell
-  - Start a terminal session.
-  - `bash <(curl -s -S -L https://git.io/vAAj9) [-l] [-d <Path>]`
-  - `-l` - Update to latest version, do not create project or authorizations
-  - `-d <Path>` - Installation Path, defaults to $HOME/bin
+  - Start a terminal session and execute one of the following commands:
+  - New install, default path `$HOME/bin`
+    - `bash <(curl -s -S -L https://git.io/vAAj9)`
+  - New install, specify a path
+    - `bash <(curl -s -S -L https://git.io/vAAj9) -d <Path>`
+  - Upgrade, default path `$HOME/bin`
+    - `bash <(curl -s -S -L https://git.io/vAAj9) -l`
+  - Upgrade, specify a path
+    - `bash <(curl -s -S -L https://git.io/vAAj9) -l -d <Path>`
 
 * Single Executable Archive, Manual, Google Cloud Shell - `gamadv-xtd-4.wx.yz-debian-x86_64.tar.xz`
   - Download the archive, extract the contents into some directory.
