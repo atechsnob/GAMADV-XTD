@@ -74,6 +74,8 @@ You can download the current GAMADV-XTD release from the [GitHub Releases](https
 For information about the GAMADV-XTD configuration file gam.cfg, see: https://github.com/taers232c/GAMADV-XTD/wiki/gam.cfg
 
 Enter the following gam commands and follow instructions to create the necessary authorizations.
+- Follow download instructions: [Downloads](#downloads)
+- For Linux/Mac OS/Google Cloud Shell, set your gam alias: `alias gam='$HOME/bin/gamadv-xtd/gam'`
 - Build gam.cfg: `gam config verify`
 - Build GAM Project for authorization: `gam create project`
 - Authorize Gam Client: `gam oauth create`
