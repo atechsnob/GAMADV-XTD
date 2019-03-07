@@ -22,7 +22,7 @@ For more information, see https://github.com/taers232c/GAMADV-XTD
 """
 
 __author__ = u'Ross Scroggs <ross.scroggs@gmail.com>'
-__version__ = u'4.65.68'
+__version__ = u'4.65.69'
 __license__ = u'Apache License 2.0 (http://www.apache.org/licenses/LICENSE-2.0)'
 
 import base64
@@ -30797,11 +30797,12 @@ DOCUMENT_FORMATS_MAP = {
                   {u'mime': u'application/vnd.oasis.opendocument.text', u'ext': u'.odt'}],
   }
 
-# gam <UserTypeEntity> get drivefile <DriveFileEntity> [revision <DriveFileRevisionID>] [(format <FileFormatList>)|(gsheet|csvsheet <String>)]
+# gam <UserTypeEntity> get drivefile <DriveFileEntity> [revision <DriveFileRevisionID>]
+#	[(format <FileFormatList>)|(gsheet|csvsheet <String>)] [exportsheetaspdf <String>]
 #	[targetfolder <FilePath>] [targetname -|<FileName>] [overwrite [<Boolean>]] [showprogress [<Boolean>]]
 def getDriveFile(users):
   fileIdEntity = getDriveFileEntity()
-  csvSheetTitle = revisionId = None
+  csvSheetTitle = exportSheetAsPDF = revisionId = u''
   exportFormatName = u'openoffice'
   exportFormatChoices = [exportFormatName]
   exportFormats = DOCUMENT_FORMATS_MAP[exportFormatName]
@@ -30831,13 +30832,19 @@ def getDriveFile(users):
     elif myarg in [u'gsheet', u'csvsheet']:
       csvSheetTitle = getString(Cmd.OB_STRING)
       csvSheetTitleLower = csvSheetTitle.lower()
+    elif myarg == u'exportsheetaspdf':
+      exportSheetAsPDF = getString(Cmd.OB_STRING, minLen=0)
     elif myarg == u'nocache':
       pass
     elif myarg == u'showprogress':
       showProgress = getBoolean()
     else:
       unknownArgumentExit()
-  if csvSheetTitle:
+  if exportSheetAsPDF:
+    exportFormatName = u'pdf'
+    exportFormatChoices = [exportFormatName]
+    exportFormats = DOCUMENT_FORMATS_MAP[exportFormatName]
+  elif csvSheetTitle:
     exportFormatName = u'csv'
     exportFormatChoices = [exportFormatName]
     exportFormats = DOCUMENT_FORMATS_MAP[exportFormatName]
@@ -30848,7 +30855,7 @@ def getDriveFile(users):
     if jcount == 0:
       continue
     _, userName, _ = splitEmailAddressOrUID(user)
-    if csvSheetTitle:
+    if exportSheetAsPDF or csvSheetTitle:
       _, sheet = buildGAPIServiceObject(API.SHEETS, user, i, count)
       if not sheet:
         continue
@@ -30909,7 +30916,7 @@ def getDriveFile(users):
           spreadsheetUrl = None
           try:
             if googleDoc:
-              if csvSheetTitle is None or mimeType != MIMETYPE_GA_SPREADSHEET:
+              if (not exportSheetAsPDF and not csvSheetTitle) or mimeType != MIMETYPE_GA_SPREADSHEET:
                 request = drive.files().export_media(fileId=fileId, mimeType=exportFormat[u'mime'])
                 if revisionId:
                   request.uri = u'{0}&revision={1}'.format(request.uri, revisionId)
@@ -30918,15 +30925,18 @@ def getDriveFile(users):
                 spreadsheet = callGAPI(sheet.spreadsheets(), u'get',
                                        throw_reasons=GAPI.SHEETS_ACCESS_THROW_REASONS,
                                        spreadsheetId=fileId, fields=u'spreadsheetUrl,sheets(properties(sheetId,title))')
-                for sheet in spreadsheet[u'sheets']:
-                  if sheet[u'properties'][u'title'].lower() == csvSheetTitleLower:
-                    spreadsheetUrl = u'{0}?format=csv&id={1}&gid={2}'.format(re.sub(u'/edit$', u'/export', spreadsheet[u'spreadsheetUrl']),
-                                                                             fileId, sheet[u'properties'][u'sheetId'])
-                    break
-                else:
-                  entityActionNotPerformedWarning(entityValueList, Msg.NOT_FOUND, j, jcount)
-                  csvSheetNotFound = True
-                  continue
+                spreadsheetUrl = u'{0}?exportFormat={1}&format={1}&id={2}'.format(re.sub(u'/edit$', u'/export', spreadsheet[u'spreadsheetUrl']),
+                                                                 exportFormatName, fileId)
+                if csvSheetTitle:
+                  for sheet in spreadsheet[u'sheets']:
+                    if sheet[u'properties'][u'title'].lower() == csvSheetTitleLower:
+                      spreadsheetUrl += u'&gid={0}'.format(sheet[u'properties'][u'sheetId'])
+                      break
+                  else:
+                    entityActionNotPerformedWarning(entityValueList, Msg.NOT_FOUND, j, jcount)
+                    csvSheetNotFound = True
+                    continue
+                spreadsheetUrl += exportSheetAsPDF
             else:
               if revisionId:
                 entityValueList.extend([Ent.DRIVE_FILE_REVISION, revisionId])
@@ -30943,10 +30953,15 @@ def getDriveFile(users):
                 if showProgress and not suppressStdoutMsgs:
                   entityActionPerformedMessage(entityValueList, u'{0:>7.2%}'.format(status.progress()), j, jcount)
             else:
-              _, content = drive._http.request(uri=spreadsheetUrl, method='GET')
-              fh.write(content)
-              if targetStdout and content[-1] != u'\n':
-                fh.write(u'\n')
+              status, content = drive._http.request(uri=spreadsheetUrl, method='GET')
+              if status[u'status'] == u'200':
+                fh.write(content)
+                if targetStdout and content[-1] != u'\n':
+                  fh.write(u'\n')
+              else:
+                entityModifierNewValueActionFailedWarning(entityValueList, Act.MODIFIER_TO, filename, u'HTTP Error: {0}'.format(status[u'status']), j, jcount)
+                fileDownloadFailed = True
+                break
             if not targetStdout:
               closeFile(fh)
             if not suppressStdoutMsgs:
@@ -30959,6 +30974,7 @@ def getDriveFile(users):
             break
           except googleapiclient.http.HttpError as e:
             entityActionNotPerformedWarning(entityValueList, str(e), j, jcount)
+            fileDownloadFailed = True
           if fh and not targetStdout:
             closeFile(fh)
             os.remove(filename)
