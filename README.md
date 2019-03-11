@@ -25,44 +25,6 @@ To run all commands properly, GAMADV-XTD requires three things:
 * Authorization to act as your G Suite Administrator in order to perform management functions like add users, modify group settings and membership and pull domain reports.
 * A special service account that is authorized to act on behalf of your users in order to modify user-specific settings and data such as Drive files, Calendars and Gmail messages and settings like signatures.
 
-# Downloads
-You can download the current GAMADV-XTD release from the [GitHub Releases] page. Choose one of the following:
-
-* Single Executable Archive, Automatic, Linux/Mac OS/Google Cloud Shell
-  - Start a terminal session and execute one of the following commands:
-  - New install, default path `$HOME/bin`
-    - `bash <(curl -s -S -L https://git.io/vAAj9)`
-  - New install, specify a path
-    - `bash <(curl -s -S -L https://git.io/vAAj9) -d <Path>`
-  - Upgrade, default path `$HOME/bin`
-    - `bash <(curl -s -S -L https://git.io/vAAj9) -l`
-  - Upgrade, specify a path
-    - `bash <(curl -s -S -L https://git.io/vAAj9) -l -d <Path>`
-
-* Single Executable Archive, Manual, Google Cloud Shell - `gamadv-xtd-4.wx.yz-debian-x86_64.tar.xz`
-  - Download the archive, extract the contents into some directory.
-  - Start a terminal session and cd to the install directory.
-
-* Single Executable Archive, Manual, Linux - `gamadv-xtd-4.wx.yz-linux-x86_64.tar.xz, gamadv-xtd-4.wx.yz-debian-x86_64.tar.xz`
-  - Download the archive, extract the contents into some directory.
-  - Start a terminal session and cd to the install directory.
-
-* Single Executable Archive, Manual, Mac OS - `gamadv-xtd-4.wx.yz-macos-10.10-11-x86_64.tar, gamadv-xtd-4.wx.yz-macos-10.12-13.tar`
-  - Download the archive, extract the contents into some directory.
-  - Start a terminal session and cd to the install directory.
-
-* Single Executable Archive, Manual, Windows - `gamadv-xtd-4.wx.yz-windows-x64.zip, gamadv-xtd-4.wx.yz-windows.zip`
-  - Download the archive, extract the contents into some directory.
-  - Start a terminal session and cd to the install directory.
-
-* Single Executable Installer, Manual, Windows - `gamadv-xtd-4.wx.yz-windows-x64.msi`
-  - Download the installer and run it.
-  - Start a Command Prompt/PowerShell session and cd to the install directory.
-
-* Source, all platforms - Source code(zip), Source code(tar.gz)
-  - Download the archive, extract the contents into some directory.
-  - Start a terminal/Command Prompt/PowerShell session and cd to the install directory.
-
 # Installation - First time GAM installation
 Use these steps if you have never used any version of GAM in your domain. They will create a GAM project
 and all necessary authentications.
