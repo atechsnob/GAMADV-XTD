@@ -7,6 +7,8 @@ GAMADV-XTD requires G Suite for Business, Education, Non Profit, Partner or Gove
 
 GAMADV-XTD is a rewrite/extension of Jay Lee's [GAM], without his efforts, this version wouldn't exist.
 
+GAMADV-XTD is backwards compatible with [GAM], meaning that if your command works with regular GAM, it will also work with GAMADV-XTD. There may be differences in output, but the syntax is compatible.
+
 # Documentation
 Basic GAM documentation is hosted in the [GitHub Wiki]. Documentation specifically for GAMADV-XTD is hosted in the [GitHub GAMADV-XTD Wiki] and in Gam*.txt files.
 
@@ -33,7 +35,7 @@ and all necessary authentications.
 * [Configuration]
 * [Install]
 
-# Installation - Upgrading from a GAM version other than a prior version of GAMADV-X or GAMADV-XTD
+# Installation - Upgrading from a GAM version other than a prior version of GAMADV-X or GAMADV-XTD or GAMADV-XTD3
 Use these steps if you have used any version of GAM in your domain. They will update your GAM project
 and all necessary authentications.
 
@@ -41,22 +43,22 @@ and all necessary authentications.
 * [Configuration]
 * [Upgrade]
 
-# Installation - Upgrading from a prior version of GAMADV-X or GAMADV-XTD
-Use these steps if you already use GAMADV-X or GAMADV-XTD. The updates may tell you to update your GAM project
+# Installation - Upgrading from a prior version of GAMADV-X or GAMADV-XTD or GAMADV-XTD3
+Use these steps if you already use GAMADV-X or GAMADV-XTD or GAMADV-XTD3. The updates may tell you to update your GAM project
 or authentications because new features have been included.
 
 * [Updates]
 * [Downloads]
 
 # Multiple Versions
-You can install multiple versions of GAM, GAMADV-X and GAMADV-XTD in different parallel directories.
+You can install multiple versions of GAM, GAMADV-X, GAMADV-XTD and GAMADV-XTD3 in different parallel directories.
 
 [GAM]: https://github.com/jay0lee/GAM
 [GitHub Releases]: https://github.com/taers232c/GAMADV-XTD/releases
 [GitHub]: https://github.com/taers232c/GAMADV-XTD/tree/master
 [GitHub Wiki]: https://github.com/jay0lee/GAM/wiki/
 [GitHub GAMADV-XTD Wiki]: https://github.com/taers232c/GAMADV-XTD/wiki/
-[Google Groups]: http://groups.google.com/group/google-apps-manager
+[Google Groups]: https://groups.google.com/group/google-apps-manager
 [Downloads]: https://github.com/taers232c/GAMADV-XTD/wiki/Downloads
 [Configuration]: https://github.com/taers232c/GAMADV-XTD/wiki/gam.cfg
 [Install]: https://github.com/taers232c/GAMADV-XTD/wiki/How-to-Install-Advanced-GAM
