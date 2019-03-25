@@ -6114,7 +6114,7 @@ def doOAuthImport():
 def checkServiceAccount(users):
   checkForExtraneousArguments()
   all_scopes, jcount = API.getSortedSvcAcctScopesList()
-  if GC.Values[GC.USER_SERVICE_ACCOUNT_ACCESS_ONLY]:
+  if not GC.Values[GC.USER_SERVICE_ACCOUNT_ACCESS_ONLY]:
     all_scopes.remove(u'https://www.googleapis.com/auth/apps.groups.migration')
     jcount -= 1
   i, count, users = getEntityArgument(users)
