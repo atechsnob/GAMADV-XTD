@@ -1,3 +1,7 @@
+4.65.82
+
+Code and documentation cleanup.
+
 4.65.81
 
 Fixed bug in `gam check service account` where extra scope was being authorized.
