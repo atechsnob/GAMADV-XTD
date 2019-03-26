@@ -22,7 +22,7 @@ For more information, see https://github.com/taers232c/GAMADV-XTD
 """
 
 __author__ = u'Ross Scroggs <ross.scroggs@gmail.com>'
-__version__ = u'4.65.82'
+__version__ = u'4.65.83'
 __license__ = u'Apache License 2.0 (http://www.apache.org/licenses/LICENSE-2.0)'
 
 import base64
@@ -6957,7 +6957,7 @@ def doReport():
           invalidChoiceExit(fullDataServices, True)
     elif customerReports and myarg == u'noauthorizedapps':
       noAuthorizedApps = True
-    elif customerReports and myarg == u'maxactivities':
+    elif activityReports and myarg == u'maxactivities':
       maxActivities = getInteger(minVal=0)
     elif activityReports and myarg in [u'start', u'starttime', u'end', u'endtime', u'yesterday']:
       startEndTime.Get(myarg)
