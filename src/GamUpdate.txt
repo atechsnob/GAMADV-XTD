@@ -1,3 +1,12 @@
+4.70.00
+
+Starting from initial code by Jay Lee, added support for the Alert Center API.
+* https://github.com/taers232c/GAMADV-XTD/wiki/Alert-Center
+
+To use these commands you must update your gam project and service account authorization.
+gam update project
+gam user user@domain.com check serviceaccount
+
 4.65.91
 
 Fixed bug where field names including a `_` character were flagged as incorrect in some cases.
