@@ -22,7 +22,7 @@ For more information, see https://github.com/taers232c/GAMADV-XTD
 """
 
 __author__ = u'Ross Scroggs <ross.scroggs@gmail.com>'
-__version__ = u'4.70.00'
+__version__ = u'4.70.01'
 __license__ = u'Apache License 2.0 (http://www.apache.org/licenses/LICENSE-2.0)'
 
 import base64
@@ -21519,10 +21519,12 @@ def infoUsers(entityList):
     elif myarg == u'noschemas':
       getSchemas = False
       projection = u'basic'
-    elif myarg in [u'custom', u'schemas']:
+    elif myarg in [u'custom', u'schemas', u'customschemas']:
       getSchemas = True
       projection = u'custom'
       customFieldMask = getString(Cmd.OB_SCHEMA_NAME_LIST)
+      if myarg == u'customschemas':
+        fieldsList.append(u'customSchemas')
     elif myarg in [u'products', u'product']:
       skus = SKU.convertProductListToSKUList(getGoogleProductList())
     elif myarg in [u'sku', u'skus']:
@@ -21531,12 +21533,8 @@ def infoUsers(entityList):
       viewType = u'domain_public'
       getGroups = getLicenses = False
     elif myarg in USER_FIELDS_CHOICE_MAP:
-      if not fieldsList:
-        fieldsList = [u'primaryEmail']
       addFieldToFieldsList(myarg, USER_FIELDS_CHOICE_MAP, fieldsList)
     elif myarg == u'fields':
-      if not fieldsList:
-        fieldsList.append(u'primaryEmail')
       for field in _getFieldsList():
         if field in USER_FIELDS_CHOICE_MAP:
           addFieldToFieldsList(field, USER_FIELDS_CHOICE_MAP, fieldsList)
@@ -21547,6 +21545,8 @@ def infoUsers(entityList):
       pass
     else:
       FJQC.getFormatJSON(myarg)
+  if fieldsList:
+    fieldsList.append(u'primaryEmail')
   fields = u','.join(set(fieldsList)).replace(u'.', u'/') if fieldsList else None
   if getLicenses:
     lic = buildGAPIObject(API.LICENSING)
@@ -21810,12 +21810,14 @@ def infoUsers(entityList):
       else:
         entityActionFailedWarning([Ent.USER, userEmail], str(e), i, count)
 
-# gam info users <UserTypeEntity> [quick] [noaliases] [nogroups] [nolicenses|nolicences] [noschemas] [schemas|custom <SchemaNameList>]
+# gam info users <UserTypeEntity> [quick] [noaliases] [nogroups] [nolicenses|nolicences]
+#	[noschemas|(schemas|custom <SchemaNameList>)|(customschemas <SchemaNameList>)]
 #	[userview] [fields <UserFieldNameList>] [products|product <ProductIDList>] [skus|sku <SKUIDList>] [formatjson]
 def doInfoUsers():
   infoUsers(getEntityToModify(defaultEntityType=Cmd.ENTITY_USERS, delayGet=True)[1])
 
-# gam info user <UserItem> [quick] [noaliases] [nogroups] [nolicenses|nolicences] [noschemas] [schemas|custom <SchemaNameList>]
+# gam info user <UserItem> [quick] [noaliases] [nogroups] [nolicenses|nolicences]
+#	[noschemas|(schemas|custom <SchemaNameList>)|(customschemas <SchemaNameList>)]
 #	[userview] [fields <UserFieldNameList>] [products|product <ProductIDList>] [skus|sku <SKUIDList>] [formatjson]
 # gam info user
 def doInfoUser():
