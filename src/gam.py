@@ -22,7 +22,7 @@ For more information, see https://github.com/taers232c/GAMADV-XTD
 """
 
 __author__ = u'Ross Scroggs <ross.scroggs@gmail.com>'
-__version__ = u'4.70.03'
+__version__ = u'4.70.04'
 __license__ = u'Apache License 2.0 (http://www.apache.org/licenses/LICENSE-2.0)'
 
 import base64
@@ -3407,7 +3407,7 @@ def callGAPIpages(service, function, items,
                        throw_reasons=throw_reasons, retry_reasons=retry_reasons,
                        **kwargs)
     pageToken, totalItems = _processGAPIpagesResult(results, items, allResults, totalItems, page_message, message_attribute, entityType)
-    if not pageToken or maxItems and totalItems >= maxItems:
+    if not pageToken or (maxItems and totalItems >= maxItems):
       _finalizeGAPIpagesResult(page_message)
       return allResults
     kwargs[u'pageToken'] = pageToken
@@ -26100,10 +26100,19 @@ def removeCalendars(users):
   _modifyRemoveCalendars(users, calendarEntity, u'delete')
 
 CALENDAR_SIMPLE_LISTS = set([u'allowedConferenceSolutionTypes'])
+CALENDAR_EXCLUDE_OPTIONS = set([u'noprimary', u'nogroups', u'noresources', u'nosystem'])
+CALENDAR_EXCLUDE_DOMAINS = {
+  u'nogroups': u'group.calendar.google.com',
+  u'noresources': u'resource.calendar.google.com',
+  u'nosystem': u'group.v.calendar.google.com',
+  }
 
 # gam <UserTypeEntity> print calendars <UserCalendarEntity> [todrive <ToDriveAttributes>*] [permissions]
+#	[primary] <CalendarSelectProperty>* [noprimary] [nogroups] [noresources] [nosystem] [otherusers]
 #	[formatjson] [delimiter <Character>] [quotechar <Character>}
-# gam <UserTypeEntity> show calendars <UserCalendarEntity> [permissions] [formatjson]
+# gam <UserTypeEntity> show calendars <UserCalendarEntity> [permissions]
+#	[primary] <CalendarSelectProperty>* [noprimary] [nogroups] [noresources] [nosystem] [otherusers]
+#	[formatjson]
 def printShowCalendars(users):
 
   def _getPermissions(cal, userCalendar):
@@ -26117,7 +26126,9 @@ def printShowCalendars(users):
     return []
 
   acls = []
-  primary = getCalPermissions = False
+  getCalPermissions = noPrimary = primaryOnly = False
+  excludes = set()
+  excludeDomains = []
   sortTitles = [u'primaryEmail', u'calendarId']
   csvFormat = Act.csvFormat()
   if csvFormat:
@@ -26135,13 +26146,22 @@ def printShowCalendars(users):
     elif myarg == u'allcalendars':
       pass
     elif myarg == u'primary':
-      primary = True
+      primaryOnly = True
     elif _getCalendarSelectProperty(myarg, kwargs):
       pass
+    elif myarg in CALENDAR_EXCLUDE_OPTIONS:
+      excludes.add(myarg)
+    elif myarg == u'otherusers':
+      excludes |= CALENDAR_EXCLUDE_OPTIONS
     elif myarg == u'delimiter':
       delimiter = getCharacter()
     else:
       FJQC.getFormatJSONQuoteChar(myarg, titles if csvFormat else None)
+  for exclude in excludes:
+    if exclude == u'noprimary':
+      noPrimary = True
+    else:
+      excludeDomains.append(CALENDAR_EXCLUDE_DOMAINS[exclude])
   i, count, users = getEntityArgument(users)
   for user in users:
     i += 1
@@ -26158,13 +26178,24 @@ def printShowCalendars(users):
     except (GAPI.serviceNotAvailable, GAPI.authError):
       entityServiceNotApplicableWarning(Ent.USER, user, i, count)
       continue
-    if primary:
+    if primaryOnly:
       for calendar in calendars:
         if calendar.get(u'primary', False):
           calendars = [calendar]
           break
       else:
         calendars = []
+    elif noPrimary or excludeDomains:
+      allCalendars = calendars[:]
+      calendars = []
+      for calendar in allCalendars:
+        if noPrimary and calendar.get(u'primary', False):
+          continue
+        if excludeDomains:
+          _, domain = splitEmailAddress(calendar[u'id'])
+          if domain in excludeDomains:
+            continue
+        calendars.append(calendar)
     jcount = len(calendars)
     if not csvFormat:
       if not FJQC.formatJSON:
@@ -28963,6 +28994,8 @@ class DriveListParameters(object):
     self.showOwnedBy = True
     self.allowQuery = allowQuery
     self.permissionFields = set()
+    self.maxItems = 0
+    self.queryTimes = {}
 
   def _getPermissionMatch(self):
     startEndTime = StartEndTime(u'expirationstart', u'expirationend')
@@ -29037,6 +29070,8 @@ class DriveListParameters(object):
             self.query += u"mimeType != '{0}' and ".format(mimeType)
           self.query = self.query[:-5]
         self.query += u')'
+    elif myarg == u'maxfiles':
+      self.maxItems = getInteger(minVal=0)
     elif myarg == u'minimumfilesize':
       self.minimumFileSize = getInteger(minVal=0)
     elif myarg == u'filenamematchpattern':
@@ -29060,6 +29095,8 @@ class DriveListParameters(object):
         self.query += u' and '+QUERY_SHORTCUTS_MAP[myarg]
       else:
         self.query = QUERY_SHORTCUTS_MAP[myarg]
+    elif self.allowQuery and myarg.startswith(u'querytime'):
+      self.queryTimes[myarg] = getTimeOrDeltaFromNow()
     elif myarg == u'anyowner':
       self.showOwnedBy = None
       self.UpdateAnyOwnerQuery()
@@ -29074,6 +29111,10 @@ class DriveListParameters(object):
 
   def UpdateAnyOwnerQuery(self):
     self.query = _updateAnyOwnerQuery(self.query)
+
+  def UpdateQueryTimes(self):
+    for queryTimeName, queryTimeValue in iteritems(self.queryTimes):
+      self.query = self.query.replace(u'#{0}#'.format(queryTimeName), queryTimeValue)
 
   def CheckShowOwnedBy(self, fileInfo):
     return self.showOwnedBy is None or fileInfo.get(u'ownedByMe', self.showOwnedBy) == self.showOwnedBy
@@ -29138,6 +29179,7 @@ DRIVE_INDEXED_FIELDS = [u'parents', u'path', u'permissions']
 # gam <UserTypeEntity> print|show filelist [todrive <ToDriveAttributes>*] [corpora <CorporaAttribute>] [anyowner|(showownedby any|me|others)]
 #	[((query <QueryDriveFile>) | (fullquery <QueryDriveFile>) | <DriveFileQueryShortcut>) |
 #	  (select <DriveFileEntityListTree> [selectsubquery <QueryDriveFile>] [depth <Number>] [showparent])]
+#	[querytime.* <Time>] [maxfiles <Integer>]
 #	[showmimetype [not] <MimeTypeList>] [minimumfilesize <Integer>] [filenamematchpattern <RegularExpression>]
 #	(<PermissionMatch>)* [<PermissionMatchMode>] [<PermissionMatchAction>]
 #	[filepath|fullpath] [buildtree] [allfields|<DriveFieldName>*|(fields <DriveFieldNameList>)]
@@ -29360,6 +29402,7 @@ def printFileList(users):
     fileNameTitle = V3_FILENAME
   removeTitlesFromCSVfile([u'capabilities'], titles)
   DLP.MapDrive2QueryToDrive3()
+  DLP.UpdateQueryTimes()
   incrementalPrint = buildTree and (not filepath) and noSelect
   if buildTree:
     if not fileIdEntity.get(u'teamdrive'):
@@ -29391,14 +29434,18 @@ def printFileList(users):
       page_message = getPageMessageForWhom()
       pageToken = None
       totalItems = 0
+      maxResults = GC.Values[GC.DRIVE_MAX_RESULTS]
+      tweakMaxResults = DLP.maxItems and maxResults
       queryError = False
       while True:
+        if tweakMaxResults and DLP.maxItems-totalItems < GC.Values[GC.DRIVE_MAX_RESULTS]:
+          maxResults = DLP.maxItems-totalItems
         try:
           feed = callGAPI(drive.files(), u'list',
                           throw_reasons=GAPI.DRIVE_USER_THROW_REASONS+[GAPI.INVALID_QUERY, GAPI.INVALID, GAPI.FILE_NOT_FOUND,
                                                                        GAPI.NOT_FOUND, GAPI.TEAMDRIVE_MEMBERSHIP_REQUIRED],
                           pageToken=pageToken,
-                          q=DLP.query, orderBy=orderBy[u'list'], fields=pagesfields, pageSize=GC.Values[GC.DRIVE_MAX_RESULTS], **btkwargs)
+                          q=DLP.query, orderBy=orderBy[u'list'], fields=pagesfields, pageSize=maxResults, **btkwargs)
         except (GAPI.invalidQuery, GAPI.invalid):
           entityActionFailedWarning([Ent.USER, user, Ent.DRIVE_FILE, None], invalidQuery(DLP.query), i, count)
           queryError = True
@@ -29417,7 +29464,7 @@ def printFileList(users):
           for f_file in feed.get(VX_PAGES_FILES, []):
             _printFileInfo(drive, user, f_file)
           del feed
-        if not pageToken:
+        if not pageToken or (DLP.maxItems and totalItems >= DLP.maxItems):
           _finalizeGAPIpagesResult(page_message)
           break
       if queryError:
@@ -29428,10 +29475,11 @@ def printFileList(users):
       printGettingAllEntityItemsForWhom(Ent.DRIVE_FILE_OR_FOLDER, user, i, count, query=DLP.query)
       try:
         feed = callGAPIpages(drive.files(), u'list', VX_PAGES_FILES,
-                             page_message=getPageMessageForWhom(),
+                             page_message=getPageMessageForWhom(), maxItems=DLP.maxItems,
                              throw_reasons=GAPI.DRIVE_USER_THROW_REASONS+[GAPI.INVALID_QUERY, GAPI.INVALID, GAPI.FILE_NOT_FOUND,
                                                                           GAPI.NOT_FOUND, GAPI.TEAMDRIVE_MEMBERSHIP_REQUIRED],
-                             q=DLP.query, orderBy=orderBy[u'list'], fields=pagesfields, pageSize=GC.Values[GC.DRIVE_MAX_RESULTS], **btkwargs)
+                             q=DLP.query, orderBy=orderBy[u'list'], fields=pagesfields,
+                             pageSize=GC.Values[GC.DRIVE_MAX_RESULTS], **btkwargs)
       except (GAPI.invalidQuery, GAPI.invalid):
         entityActionFailedWarning([Ent.USER, user, Ent.DRIVE_FILE, None], invalidQuery(DLP.query), i, count)
         break
@@ -29560,11 +29608,13 @@ def printShowFilePaths(users):
 
 # gam <UserTypeEntity> print filecounts [todrive <ToDriveAttributes>*] [corpora <CorporaAttribute>] [anyowner|(showownedby any|me|others)]
 #	[query <QueryDriveFile>] [fullquery <QueryDriveFile>] [<DriveFileQueryShortcut>]
+#	[querytime.* <Time>]
 #	[showmimetype [not] <MimeTypeList>] [minimumfilesize <Integer>] [filenamematchpattern <RegularExpression>]
 #	(<PermissionMatch>)* [<PermissionMatchMode>] [<PermissionMatchAction>]
 #	[select <TeamDriveEntity>]
 # gam <UserTypeEntity> show filecounts [corpora <CorporaAttribute>] [anyowner|(showownedby any|me|others)]
 #	[query <QueryDriveFile>] [fullquery <QueryDriveFile>] [<DriveFileQueryShortcut>]
+#	[querytime.* <Time>]
 #	[showmimetype [not] <MimeTypeList>] [minimumfilesize <Integer>] [filenamematchpattern <RegularExpression>]
 #	(<PermissionMatch>)* [<PermissionMatchMode>] [<PermissionMatchAction>]
 #	[select <TeamDriveEntity>]
@@ -29607,6 +29657,7 @@ def printShowFileCounts(users):
     sortTitles = [u'User', u'id', u'name', u'Total'] if fileIdEntity.get(u'teamdrive') else [u'User', u'Total']
     titles, csvRows = initializeTitlesCSVfile(sortTitles)
   DLP.MapDrive2QueryToDrive3()
+  DLP.UpdateQueryTimes()
   pagesfields = VX_NPT_FILES_FIELDLIST.format(u','.join(set(fieldsList))).replace(u'.', u'/')
   i, count, users = getEntityArgument(users)
   for user in users:
