@@ -3,7 +3,7 @@ rm -rf build
 rm -rf dist
 rm -f gamadv-xtd-$1-macos.tar
 
-pyinstaller-2.7 --clean -F --distpath=gamadv-xtd macos-gam.spec
+pyinstaller2.7 --clean -F --distpath=gamadv-xtd macos-gam.spec
 cp LICENSE gamadv-xtd
 cp license.rtf gamadv-xtd
 cp Gam*.txt gamadv-xtd
