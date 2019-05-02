@@ -110,7 +110,7 @@ import oauth2client.file
 import oauth2client.tools
 from oauth2client.contrib.dictionary_storage import DictionaryStorage
 from oauth2client.contrib.multiprocess_file_storage import MultiprocessFileStorage
-from passlib.handlers.sha2_crypt import sha512_crypt
+from passlib.hash import sha512_crypt
 
 # Python 2
 string_types = (basestring,)
@@ -21037,7 +21037,7 @@ def getUserAttributes(cd, updateCmd, noUid=False):
       body[itemName].append(itemValue)
 
   def gen_sha512_hash(password):
-    return sha512_crypt.encrypt(password, rounds=5000)
+    return sha512_crypt.hash(password, rounds=5000)
 
   def _splitSchemaNameDotFieldName(sn_fn, fnRequired=True):
     if sn_fn.find('.') != -1:
