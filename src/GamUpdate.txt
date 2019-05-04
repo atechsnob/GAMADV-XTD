@@ -1,3 +1,11 @@
+4.82.07
+
+Fixed bug in `gam create/use/update/delete/show/print projects` when `<EmailAddress>` was not specified.
+
+4.82.03/06
+
+Skipped.
+
 4.82.02
 
 Mobile devices may have embedded newlines, encode them to avoid problems on output.
