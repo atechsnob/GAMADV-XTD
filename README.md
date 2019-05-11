@@ -1,7 +1,7 @@
 # Introduction
 GAMADV-XTD is a free, open source command line tool for Google G Suite Administrators to manage domain and user settings quickly and easily.
 
-GAMADV-XTD is built with Python 2; as Python 2 support ends on 2020-01-01, new/existing users should use the Python 3 version [GAMADVXTD3].
+GAMADV-XTD is built with Python 2; as Python 2 support ends on 2020-01-01, new/existing users should use the Python 3 version [GAMADV-XTD3].
 
 This page provides simple instructions for downloading, installing and starting to use GAMADV-XTD.
 
@@ -56,7 +56,7 @@ or authentications because new features have been included.
 You can install multiple versions of GAM, GAMADV-X, GAMADV-XTD and GAMADV-XTD3 in different parallel directories.
 
 [GAM]: https://github.com/jay0lee/GAM
-[GAMADVXTD3]: https://github.com/taers232c/GAMADV-XTD3
+[GAMADV-XTD3]: https://github.com/taers232c/GAMADV-XTD3
 [GitHub Releases]: https://github.com/taers232c/GAMADV-XTD/releases
 [GitHub]: https://github.com/taers232c/GAMADV-XTD/tree/master
 [GitHub Wiki]: https://github.com/jay0lee/GAM/wiki/
