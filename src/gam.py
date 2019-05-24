@@ -22,7 +22,7 @@ For more information, see https://github.com/taers232c/GAMADV-XTD
 """
 
 __author__ = 'Ross Scroggs <ross.scroggs@gmail.com>'
-__version__ = '4.83.05'
+__version__ = '4.83.06'
 __license__ = 'Apache License 2.0 (http://www.apache.org/licenses/LICENSE-2.0)'
 
 import base64
@@ -4893,7 +4893,7 @@ def getTodriveParameters():
       invalidTodriveUserExit(Ent.USER, Msg.NOT_FOUND)
     try:
       result = callGAPI(drive.files(), 'get',
-                        throw_reasons=[GAPI.FILE_NOT_FOUND],
+                        throw_reasons=GAPI.DRIVE_USER_THROW_REASONS+[GAPI.FILE_NOT_FOUND],
                         fileId=todrive['fileId'], fields=VX_ID_MIMETYPE_CANEDIT, supportsAllDrives=True)
       if result['mimeType'] == MIMETYPE_GA_FOLDER:
         invalidTodriveFileIdExit(Ent.DRIVE_FILE_ID, Msg.NOT_AN_ENTITY.format(Ent.Singular(Ent.DRIVE_FILE)))
@@ -4901,6 +4901,8 @@ def getTodriveParameters():
         invalidTodriveFileIdExit(Ent.DRIVE_FILE_ID, Msg.NOT_WRITABLE)
     except GAPI.fileNotFound:
       invalidTodriveFileIdExit(Ent.DRIVE_FILE_ID, Msg.NOT_FOUND)
+    except (GAPI.serviceNotAvailable, GAPI.authError, GAPI.domainPolicy) as e:
+      invalidTodriveUserExit(Ent.USER, str(e))
   elif not todrive['parent'] or todrive['parent'] == 'root':
     todrive['parentId'] = 'root'
   else:
@@ -4910,10 +4912,12 @@ def getTodriveParameters():
     if todrive['parent'].startswith('id:'):
       try:
         result = callGAPI(drive.files(), 'get',
-                          throw_reasons=[GAPI.FILE_NOT_FOUND],
+                          throw_reasons=GAPI.DRIVE_USER_THROW_REASONS+[GAPI.FILE_NOT_FOUND],
                           fileId=todrive['parent'][3:], fields=VX_ID_MIMETYPE_CANEDIT, supportsAllDrives=True)
       except GAPI.fileNotFound:
         invalidTodriveParentExit(Ent.DRIVE_FOLDER_ID, Msg.NOT_FOUND)
+      except (GAPI.serviceNotAvailable, GAPI.authError, GAPI.domainPolicy) as e:
+        invalidTodriveUserExit(Ent.USER, str(e))
       if result['mimeType'] != MIMETYPE_GA_FOLDER:
         invalidTodriveParentExit(Ent.DRIVE_FOLDER_ID, Msg.NOT_AN_ENTITY.format(Ent.Singular(Ent.DRIVE_FOLDER)))
       if not result['capabilities']['canEdit']:
@@ -4922,12 +4926,14 @@ def getTodriveParameters():
     else:
       try:
         results = callGAPIpages(drive.files(), 'list', 'files',
-                                throw_reasons=[GAPI.INVALID_QUERY],
+                                throw_reasons=GAPI.DRIVE_USER_THROW_REASONS+[GAPI.INVALID_QUERY],
                                 q="name = '{0}'".format(todrive['parent']),
                                 fields='nextPageToken,files(id,mimeType,capabilities(canEdit))',
                                 pageSize=1, supportsAllDrives=True)
       except GAPI.invalidQuery:
         invalidTodriveParentExit(Ent.DRIVE_FOLDER_NAME, Msg.NOT_FOUND)
+      except (GAPI.serviceNotAvailable, GAPI.authError, GAPI.domainPolicy) as e:
+        invalidTodriveUserExit(Ent.USER, str(e))
       if not results:
         invalidTodriveParentExit(Ent.DRIVE_FOLDER_NAME, Msg.NOT_FOUND)
       if results[0]['mimeType'] != MIMETYPE_GA_FOLDER:
@@ -4989,10 +4995,12 @@ def send_email(msgSubject, msgBody, msgTo, i=0, count=0, msgFrom=None, msgReplyT
   Act.Set(Act.SENDEMAIL)
   try:
     callGAPI(gmail.users().messages(), 'send',
-             throw_reasons=[GAPI.INVALID_ARGUMENT, GAPI.FORBIDDEN],
+             throw_reasons=[GAPI.SERVICE_NOT_AVAILABLE, GAPI.AUTH_ERROR, GAPI.DOMAIN_POLICY,
+                            GAPI.INVALID_ARGUMENT, GAPI.FORBIDDEN],
              userId=userId, body={'raw': base64.urlsafe_b64encode(message.as_string())}, fields='')
     entityActionPerformed([Ent.RECIPIENT, msgTo, Ent.MESSAGE, msgSubject], i, count)
-  except (GAPI.invalidArgument, GAPI.forbidden) as e:
+  except (GAPI.serviceNotAvailable, GAPI.authError, GAPI.domainPolicy,
+          GAPI.invalidArgument, GAPI.forbidden) as e:
     entityActionFailedWarning([Ent.RECIPIENT, msgTo, Ent.MESSAGE, msgSubject], str(e), i, count)
   Act.Set(action)
 
@@ -5174,7 +5182,9 @@ def writeCSVfile(csvRows, titles, list_type, todrive, sortTitles=None, quotechar
       importSize = csvFile.tell()
       try:
         if GC.Values[GC.TODRIVE_CONVERSION]:
-          result = callGAPI(drive.about(), 'get', fields='maxImportSizes')
+          result = callGAPI(drive.about(), 'get',
+                            throw_reasons=GAPI.DRIVE_USER_THROW_REASONS,
+                            fields='maxImportSizes')
           if len(csvRows)*len(titles['list']) > MAX_GOOGLE_SHEET_CELLS or importSize > int(result['maxImportSizes'][MIMETYPE_GA_SPREADSHEET]):
             printKeyValueList([WARNING, Msg.RESULTS_TOO_LARGE_FOR_GOOGLE_SPREADSHEET])
             mimeType = 'text/csv'
@@ -5189,12 +5199,12 @@ def writeCSVfile(csvRows, titles, list_type, todrive, sortTitles=None, quotechar
         if not todrive['fileId']:
           body['parents'] = [todrive['parentId']]
           result = callGAPI(drive.files(), 'create',
-                            throw_reasons=[GAPI.FORBIDDEN, GAPI.INSUFFICIENT_PERMISSIONS, GAPI.FILE_NOT_FOUND, GAPI.UNKNOWN_ERROR],
+                            throw_reasons=GAPI.DRIVE_USER_THROW_REASONS+[GAPI.FORBIDDEN, GAPI.INSUFFICIENT_PERMISSIONS, GAPI.FILE_NOT_FOUND, GAPI.UNKNOWN_ERROR],
                             body=body, media_body=googleapiclient.http.MediaIoBaseUpload(csvFile, mimetype='text/csv', resumable=True),
                             fields=fields, supportsAllDrives=True)
         else:
           result = callGAPI(drive.files(), 'update',
-                            throw_reasons=[GAPI.INSUFFICIENT_PERMISSIONS, GAPI.FILE_NOT_FOUND, GAPI.UNKNOWN_ERROR],
+                            throw_reasons=GAPI.DRIVE_USER_THROW_REASONS+[GAPI.INSUFFICIENT_PERMISSIONS, GAPI.FILE_NOT_FOUND, GAPI.UNKNOWN_ERROR],
                             fileId=todrive['fileId'], body=body, media_body=googleapiclient.http.MediaIoBaseUpload(csvFile, mimetype='text/csv', resumable=True),
                             fields=fields, supportsAllDrives=True)
         if todrive['sheet'] is not None and result['mimeType'] == MIMETYPE_GA_SPREADSHEET:
@@ -5212,8 +5222,6 @@ def writeCSVfile(csvRows, titles, list_type, todrive, sortTitles=None, quotechar
                      body={'requests': [{'updateSheetProperties': {'properties': sheets['sheets'][0]['properties'], 'fields': 'title'}}]})
           except (GAPI.notFound, GAPI.forbidden, GAPI.internalError, GAPI.insufficientFilePermissions, GAPI.badRequest, GAPI.internalError) as e:
             entityActionFailedWarning([Ent.USER, user, Ent.SPREADSHEET, title], str(e), 0, 0)
-          except (GAPI.serviceNotAvailable, GAPI.authError, GAPI.domainPolicy) as e:
-            userSvcNotApplicableOrDriveDisabled(user, str(e), 0, 0)
           Act.Set(action)
         file_url = result[V3_WEB_VIEW_LINK]
         msg_txt = '{0}:\n{1}'.format(Msg.DATA_UPLOADED_TO_DRIVE_FILE, file_url)
@@ -5229,6 +5237,8 @@ def writeCSVfile(csvRows, titles, list_type, todrive, sortTitles=None, quotechar
           entityActionFailedWarning([Ent.DRIVE_FOLDER, todrive['parentId']], str(e))
         else:
           entityActionFailedWarning([Ent.DRIVE_FILE, todrive['fileId']], str(e))
+      except (GAPI.serviceNotAvailable, GAPI.authError, GAPI.domainPolicy) as e:
+        userSvcNotApplicableOrDriveDisabled(user, str(e), 0, 0)
     closeFile(csvFile)
 
   def rowRegexFilterMatch(row, columns, filterPattern):
