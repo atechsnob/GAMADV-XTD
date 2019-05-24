@@ -6756,7 +6756,7 @@ def _getLoginHintProjectId(createCmd):
   elif createCmd:
     projectId = 'gam-project'
     for _ in range(3):
-      projectId += '-{0}'.format(''.join(random.choice(string.digits + string.ascii_lowercase) for _ in range(3)))
+      projectId += '-{0}'.format(''.join(random.sample(string.digits+string.ascii_lowercase, 3)))
   else:
     projectId = readStdin('\nWhat is your API project ID? ').strip()
     if not PROJECTID_PATTERN.match(projectId):
@@ -21650,7 +21650,7 @@ def getUserAttributes(cd, updateCmd, noUid=False):
     else:
       unknownArgumentExit()
   if need_password:
-    body['password'] = ''.join(random.sample(string.printable, 25))
+    body['password'] = ''.join(random.sample(string.digits+string.ascii_letters, 25))
   if notify:
     notify['password'] = body.get('password')
   if 'password' in body and need_to_hash_password:
@@ -25312,7 +25312,7 @@ def encode_multipart(fields, files, boundary=None):
     return '--{0}'.format(boundary), 'Content-Disposition: form-data; name="{0}"'.format(escape_quote(name)), '', str(value)
 
   if boundary is None:
-    boundary = ''.join(random.choice(string.digits+string.ascii_letters) for i in range(30))
+    boundary = ''.join(random.sample(string.digits+string.ascii_letters, 30))
   lines = []
   for name, value in iteritems(fields):
     if name == 'tags':
