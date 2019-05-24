@@ -768,7 +768,7 @@ gam calendar|calendars <CalendarEntity> update <CalendarACLRole> ([user] <EmailA
 gam calendar|calendars <CalendarEntity> delete [<CalendarACLRole>] ([user] <EmailAddress>)|(group <EmailAddress>)|(domain [<DomainName>])|default
 gam calendar|calendars <CalendarEntity> showacl [formatjson]
 
-<EventSelectProperty:> ::=
+<EventSelectProperty> ::=
         (endtime|timemax <Time>)|
         (query <QueryCalendar>)|
         (privateextendedproperty <String>)|
@@ -779,7 +779,7 @@ gam calendar|calendars <CalendarEntity> showacl [formatjson]
         (starttime|timemin <Time>)|
         (updatedmin <Time>)
 
-<EventMatchProperty:> ::=
+<EventMatchProperty> ::=
         (matchfield attendees <EmailAddressEntity>)|
         (matchfield attendeespattern <RegularExpression>)|
         (matchfield creatoremail <RegularExpression>)|
@@ -2692,7 +2692,7 @@ gam <UserTypeEntity> transfer calendars <UserItem> <UserCalendarEntity>
         <CalendarSettings>] [append description|location|summary] [noupdatemessages]
 gam <UserTypeEntity> transfer seccals <UserItem> [keepuser] [sendnotifications <Boolean>]
 
-<EventSelectProperty:> ::=
+<EventSelectProperty> ::=
         (endtime|timemax <Time>)|
         (query <QueryCalendar>)|
         (privateextendedproperty <String>)|
@@ -2703,7 +2703,7 @@ gam <UserTypeEntity> transfer seccals <UserItem> [keepuser] [sendnotifications <
         (starttime|timemin <Time>)|
         (updatedmin <Time>)
 
-<EventMatchProperty:> ::=
+<EventMatchProperty> ::=
         (matchfield attendees <EmailAddressEntity>)|
         (matchfield attendeespattern <RegularExpression>)|
         (matchfield creatoremail <RegularExpression>)|
