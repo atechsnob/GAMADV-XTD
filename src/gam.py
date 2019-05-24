@@ -7110,7 +7110,7 @@ USER_REPORT_SERVICES = [
 REPORT_ACTIVITIES_TIME_OBJECTS = set(['time'])
 
 # gam report <ActivityApplictionName> [todrive <ToDriveAttributes>*]
-#	[user all|<UserItem>] [select <UserTypeEntity>]
+#	[(user all|<UserItem>)|(orgunit|org|ou <OrgUnitPath>)|(select <UserTypeEntity>)]
 #	[([start <Time>] [end <Time>])|(range <Time> <Time>)|yesterday]
 #	[filtertime.* <Time>] [filter|filters <String>]
 #	[event|events <EventNameList>] [ip <String>]
@@ -7449,7 +7449,8 @@ def doReport():
           if not userCustomerRange and dataRequiredServices is not None:
             warnings = callGAPIitems(rep.userUsageReport(), 'get', 'warnings',
                                      throw_reasons=[GAPI.INVALID, GAPI.BAD_REQUEST, GAPI.FORBIDDEN],
-                                     userKey=user, date=tryDate, customerId=customerId, orgUnitID=orgUnitId, fields='warnings')
+                                     userKey=user, date=tryDate, customerId=customerId,
+                                     orgUnitID=orgUnitId, fields='warnings')
             fullData, tryDate = _checkDataRequiredServices(warnings, tryDate)
             if fullData < 0:
               printWarningMessage(DATA_NOT_AVALIABLE_RC, Msg.NO_REPORT_AVAILABLE.format(report))
@@ -7460,7 +7461,8 @@ def doReport():
           usage = callGAPIpages(rep.userUsageReport(), 'get', 'usageReports',
                                 page_message=page_message,
                                 throw_reasons=[GAPI.INVALID, GAPI.BAD_REQUEST, GAPI.FORBIDDEN],
-                                userKey=user, date=tryDate, customerId=customerId, orgUnitID=orgUnitId, filters=filters, parameters=parameters,
+                                userKey=user, date=tryDate, customerId=customerId,
+                                orgUnitID=orgUnitId, filters=filters, parameters=parameters,
                                 maxResults=maxResults)
           if not userCustomerRange and not usage:
             startDateTime += datetime.timedelta(days=-1)
@@ -7554,14 +7556,16 @@ def doReport():
     if select:
       page_message = None
       normalizeUsers = True
+      orgUnitId = None
     elif userKey == 'all':
-      printGettingAllAccountEntities(Ent.ACTIVITY)
+      printGettingEntityItemForWhom(Ent.ACTIVITY, 'users in orgUnit {0}'.format(orgUnit) if orgUnit else 'all users')
       page_message = getPageMessage(showTotal=False)
       users = ['all']
     else:
       Ent.SetGetting(Ent.ACTIVITY)
       page_message = getPageMessage(showTotal=False)
       users = [normalizeEmailAddressOrUID(userKey)]
+      orgUnitId = None
     if not eventNames:
       eventNames.append(None)
     titles, csvRows = initializeTitlesCSVfile(None)
@@ -7571,7 +7575,7 @@ def doReport():
       i += 1
       if normalizeUsers:
         user = normalizeEmailAddressOrUID(user)
-      if select or userKey != 'all':
+      if select or user != 'all':
         printGettingEntityItemForWhom(Ent.ACTIVITY, user, i, count)
       for eventName in eventNames:
         try:
@@ -7579,7 +7583,8 @@ def doReport():
                                page_message=page_message, maxItems=maxActivities,
                                throw_reasons=[GAPI.BAD_REQUEST, GAPI.INVALID, GAPI.AUTH_ERROR],
                                applicationName=report, userKey=user, customerId=customerId,
-                               actorIpAddress=actorIpAddress, startTime=startEndTime.startTime, endTime=startEndTime.endTime,
+                               actorIpAddress=actorIpAddress, orgUnitID=orgUnitId,
+                               startTime=startEndTime.startTime, endTime=startEndTime.endTime,
                                eventName=eventName, filters=filters, maxResults=maxResults)
         except GAPI.badRequest:
           if user != 'all':
@@ -17772,6 +17777,7 @@ LIST_EVENTS_SELECT_PROPERTIES = {
 LIST_EVENTS_MATCH_FIELDS = {
   'attendees': ['attendees', 'email'],
   'attendeespattern': ['attendees', 'match'],
+  'attendeesstatus': ['attendees', 'status'],
   'description': ['description'],
   'location': ['location'],
   'summary': ['summary'],
@@ -17833,10 +17839,14 @@ def getCalendarEventEntity(noIds=False):
     elif myarg == 'matchfield':
       matchField = getChoice(LIST_EVENTS_MATCH_FIELDS, mapChoice=True)
       if matchField[0] != 'attendees' or matchField[1] == 'match':
-        matchPattern = getREPattern(re.IGNORECASE)
-      else:
-        matchPattern = getNormalizedEmailAddressEntity()
-      calendarEventEntity['matches'].append((matchField, matchPattern))
+        calendarEventEntity['matches'].append((matchField, getREPattern(re.IGNORECASE)))
+      elif matchField[1] == 'email':
+        calendarEventEntity['matches'].append((matchField, getNormalizedEmailAddressEntity()))
+      else: #status
+        calendarEventEntity['matches'].append((matchField,
+                                               getChoice(CALENDAR_ATTENDEE_OPTIONAL_CHOICE_MAP, defaultChoice=False, mapChoice=True),
+                                               getChoice(CALENDAR_ATTENDEE_STATUS_CHOICE_MAP, defaultChoice='needsAction', mapChoice=True),
+                                               getNormalizedEmailAddressEntity()))
     elif myarg == 'maxinstances':
       calendarEventEntity['maxinstances'] = getInteger(minVal=-1)
     elif _getCalendarListEventsProperty(myarg, LIST_EVENTS_SELECT_PROPERTIES, calendarEventEntity['kwargs']):
@@ -18007,11 +18017,21 @@ def _eventMatches(event, match):
       if attendee not in attendees:
         return False
     return True
-# match
-  for attendee in attendees:
-    if match[1].search(attendee) is not None:
-      return True
-  return False
+  if match[0][1] == 'match':
+    for attendee in attendees:
+      if match[1].search(attendee) is not None:
+        return True
+    return False
+  # status
+  for matchEmail in match[3]:
+    for attendee in event['attendees']:
+      if 'email' in attendee and matchEmail == attendee['email']:
+        if attendee.get('optional', False) != match[1] or attendee.get('responseStatus') != match[2]:
+          return False
+        break
+    else:
+      return False
+  return True
 
 def _validateCalendarGetEventIDs(origUser, user, cal, calId, j, jcount, calendarEventEntity, doIt=True, showAction=True):
   if calendarEventEntity['dict']:
@@ -18271,10 +18291,10 @@ def _wipeCalendarEvents(user, cal, calIds, count):
         continue
     try:
       callGAPI(cal.calendars(), 'clear',
-               throw_reasons=GAPI.CALENDAR_THROW_REASONS+[GAPI.NOT_FOUND, GAPI.FORBIDDEN, GAPI.REQUIRED_ACCESS_LEVEL],
+               throw_reasons=GAPI.CALENDAR_THROW_REASONS+[GAPI.NOT_FOUND, GAPI.FORBIDDEN, GAPI.INVALID, GAPI.REQUIRED_ACCESS_LEVEL],
                calendarId=calId)
       entityActionPerformed([Ent.CALENDAR, calId], i, count)
-    except (GAPI.notACalendarUser, GAPI.notFound, GAPI.forbidden, GAPI.requiredAccessLevel) as e:
+    except (GAPI.notACalendarUser, GAPI.notFound, GAPI.forbidden, GAPI.invalid, GAPI.requiredAccessLevel) as e:
       entityActionFailedWarning([Ent.CALENDAR, calId], str(e), i, count)
     except (GAPI.serviceNotAvailable, GAPI.authError):
       entityServiceNotApplicableWarning(Ent.CALENDAR, calId, i, count)
@@ -18311,9 +18331,9 @@ def _moveCalendarEvents(origUser, user, cal, calIds, count, calendarEventEntity,
         break
     Ind.Decrement()
 
-EVENT_PRINT_ORDER = ['id', 'summary', 'description', 'location',
+EVENT_PRINT_ORDER = ['id', 'summary', 'status', 'description', 'location',
                      'start', 'end', 'endTimeUnspecified',
-                     'creator', 'organizer', 'status', 'created', 'updated', 'iCalUID']
+                     'creator', 'organizer', 'created', 'updated', 'iCalUID']
 
 EVENT_TIME_OBJECTS = set(['created', 'updated', 'dateTime'])
 
