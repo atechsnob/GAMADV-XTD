@@ -22,7 +22,7 @@ For more information, see https://github.com/taers232c/GAMADV-XTD
 """
 
 __author__ = 'Ross Scroggs <ross.scroggs@gmail.com>'
-__version__ = '4.83.02'
+__version__ = '4.83.03'
 __license__ = 'Apache License 2.0 (http://www.apache.org/licenses/LICENSE-2.0)'
 
 import base64
@@ -32116,10 +32116,15 @@ def collectOrphans(users):
 TRANSFER_DRIVEFILE_ACL_ROLES_MAP = {
   'commenter': 'commenter',
   'contentmanager': 'fileOrganizer',
+  'contributor': 'writer',
   'editor': 'writer',
   'fileorganizer': 'fileOrganizer',
+  'manager': 'organizer',
   'organizer': 'organizer',
+  'owner': 'organizer',
+  'read': 'reader',
   'reader': 'reader',
+  'viewer': 'reader',
   'writer': 'writer',
   'current': 'current',
   'none': 'none',
@@ -33420,12 +33425,15 @@ def _showDriveFilePermission(permission, printKeys, timeObjects, i=0, count=0):
 DRIVEFILE_ACL_ROLES_MAP = {
   'commenter': 'commenter',
   'contentmanager': 'fileOrganizer',
+  'contributor': 'writer',
   'editor': 'writer',
   'fileorganizer': 'fileOrganizer',
+  'manager': 'organizer',
   'organizer': 'organizer',
   'owner': 'owner',
   'read': 'reader',
   'reader': 'reader',
+  'viewer': 'reader',
   'writer': 'writer',
   }
 
@@ -34502,12 +34510,16 @@ def doInfoTeamDrive():
 
 TEAMDRIVE_ACL_ROLES_MAP = {
   'commenter': 'commenter',
+  'contentmanager': 'fileOrganizer',
+  'contributor': 'writer',
   'editor': 'writer',
   'fileorganizer': 'fileOrganizer',
+  'manager': 'organizer',
   'organizer': 'organizer',
   'owner': 'organizer',
   'read': 'reader',
   'reader': 'reader',
+  'viewer': 'reader',
   'writer': 'writer',
   }
 
@@ -34520,13 +34532,22 @@ TEAMDRIVE_ROLES_CAPABILITIES_MAP = {
   }
 
 def _printShowTeamDrives(users, useDomainAdminAccess):
+  def stripNonShowFields(teamdrive):
+    if not showFields:
+      return teamdrive
+    steamdrive = {}
+    for field in showFields:
+      if field in teamdrive:
+        steamdrive[field] = teamdrive[field]
+    return steamdrive
+
   csvFormat = Act.csvFormat()
   if csvFormat:
     todrive = {}
     titles, csvRows = initializeTitlesCSVfile(['User', 'id', 'name'])
   roles = set()
   query = matchPattern = None
-  showCapabilities = True
+  showFields = set()
   fieldsList = []
   FJQC = FormatJSONQuoteChar()
   while Cmd.ArgumentsRemaining():
@@ -34548,12 +34569,7 @@ def _printShowTeamDrives(users, useDomainAdminAccess):
     else:
       FJQC.getFormatJSONQuoteChar(myarg, titles if csvFormat else None)
   if fieldsList:
-    if not useDomainAdminAccess and 'capabilities' not in fieldsList:
-      addFieldToFieldsList('capabilities', TEAMDRIVE_FIELDS_CHOICE_MAP, fieldsList)
-      showCapabilities = False
-    fields = VX_NPT_TEAMDRIVES_FIELDLIST.format(','.join(set(fieldsList)).replace('.', '/'))
-  else:
-    fields = '*'
+    showFields = set(fieldsList)
   if csvFormat and not useDomainAdminAccess:
     addTitleToCSVfile('role', titles)
   i, count, users = getEntityArgument(users)
@@ -34568,10 +34584,12 @@ def _printShowTeamDrives(users, useDomainAdminAccess):
       else:
         printGettingAllEntityItemsForWhom(Ent.TEAMDRIVE, user, i, count, query)
       feed = callGAPIpages(drive.drives(), 'list', 'drives',
-                           throw_reasons=GAPI.DRIVE_USER_THROW_REASONS+[GAPI.INVALID_QUERY, GAPI.INVALID, GAPI.QUERY_REQUIRES_ADMIN_CREDENTIALS, GAPI.NO_LIST_TEAMDRIVES_ADMINISTRATOR_PRIVILEGE],
+                           throw_reasons=GAPI.DRIVE_USER_THROW_REASONS+[GAPI.INVALID_QUERY, GAPI.INVALID,
+                                                                        GAPI.QUERY_REQUIRES_ADMIN_CREDENTIALS,
+                                                                        GAPI.NO_LIST_TEAMDRIVES_ADMINISTRATOR_PRIVILEGE],
                            page_message=getPageMessage(),
                            q=query, useDomainAdminAccess=useDomainAdminAccess,
-                           fields=fields, pageSize=100)
+                           fields='*', pageSize=100)
     except (GAPI.invalidQuery, GAPI.invalid, GAPI.queryRequiresAdminCredentials, GAPI.noListTeamDrivesAdministratorPrivilege) as e:
       entityActionFailedWarning([Ent.USER, user, Ent.TEAMDRIVE, None], str(e), i, count)
       continue
@@ -34614,14 +34632,12 @@ def _printShowTeamDrives(users, useDomainAdminAccess):
         j = 0
         for teamdrive in matchedFeed:
           j += 1
-          if not showCapabilities:
-            teamdrive.pop('capabilities', None)
+          teamdrive = stripNonShowFields(teamdrive)
           _showTeamDrive(user, teamdrive, j, jcount, FJQC)
         Ind.Decrement()
       else:
         for teamdrive in matchedFeed:
-          if not showCapabilities:
-            teamdrive.pop('capabilities', None)
+          teamdrive = stripNonShowFields(teamdrive)
           if FJQC.formatJSON:
             row = {'User': user, 'id': teamdrive['id'], 'name': teamdrive['name']}
             if not useDomainAdminAccess:
