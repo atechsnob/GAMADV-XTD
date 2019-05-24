@@ -22,7 +22,7 @@ For more information, see https://github.com/taers232c/GAMADV-XTD
 """
 
 __author__ = 'Ross Scroggs <ross.scroggs@gmail.com>'
-__version__ = '4.83.03'
+__version__ = '4.83.04'
 __license__ = 'Apache License 2.0 (http://www.apache.org/licenses/LICENSE-2.0)'
 
 import base64
@@ -3071,6 +3071,8 @@ def getClientCredentials(cred_family):
     except (httplib2.ServerNotFoundError, google.auth.exceptions.TransportError) as e:
       systemErrorExit(NETWORK_ERROR_RC, str(e))
     except (oauth2client.client.AccessTokenRefreshError, google.auth.exceptions.RefreshError) as e:
+      if isinstance(e.args, tuple):
+        e = e.args[0]
       handleOAuthTokenError(e, False)
   credentials.user_agent = GAM_INFO
   return credentials
@@ -3102,6 +3104,8 @@ def getGDataOAuthToken(gdataObj, credentials=None):
   except (httplib2.ServerNotFoundError, google.auth.exceptions.TransportError) as e:
     systemErrorExit(NETWORK_ERROR_RC, str(e))
   except oauth2client.client.AccessTokenRefreshError as e:
+    if isinstance(e.args, tuple):
+      e = e.args[0]
     handleOAuthTokenError(e, False)
   gdataObj.additional_headers['Authorization'] = 'Bearer {0}'.format(credentials.access_token)
   if not GC.Values[GC.DOMAIN]:
@@ -3254,6 +3258,8 @@ def callGData(service, function,
         APIAccessDeniedExit()
       systemErrorExit(GOOGLE_API_ERROR_RC, '{0} - {1}'.format(error_code, error_message))
     except oauth2client.client.AccessTokenRefreshError as e:
+      if isinstance(e.args, tuple):
+        e = e.args[0]
       handleOAuthTokenError(e, GDATA.SERVICE_NOT_APPLICABLE in throw_errors)
       raise GDATA.ERROR_CODE_EXCEPTION_MAP[GDATA.SERVICE_NOT_APPLICABLE](str(e))
     except (http_client.ResponseNotReady, httplib2.SSLHandshakeError, socket.error) as e:
@@ -3446,6 +3452,8 @@ def callGAPI(service, function,
         APIAccessDeniedExit()
       systemErrorExit(HTTP_ERROR_RC, formatHTTPError(http_status, reason, message))
     except (oauth2client.client.AccessTokenRefreshError, google.auth.exceptions.RefreshError) as e:
+      if isinstance(e.args, tuple):
+        e = e.args[0]
       handleOAuthTokenError(e, GAPI.SERVICE_NOT_AVAILABLE in throw_reasons)
       raise GAPI.REASON_EXCEPTION_MAP[GAPI.SERVICE_NOT_AVAILABLE](str(e))
     except httplib2.CertificateValidationUnsupported:
@@ -3658,6 +3666,8 @@ def buildGAPIObject(api):
   except (httplib2.ServerNotFoundError, google.auth.exceptions.TransportError) as e:
     systemErrorExit(NETWORK_ERROR_RC, str(e))
   except (oauth2client.client.AccessTokenRefreshError, google.auth.exceptions.RefreshError) as e:
+    if isinstance(e.args, tuple):
+      e = e.args[0]
     handleOAuthTokenError(e, False)
   if not GC.Values[GC.DOMAIN]:
     GC.Values[GC.DOMAIN] = credentials.id_token.get('hd', 'UNKNOWN').lower()
@@ -3708,7 +3718,7 @@ def buildGAPIServiceObject(api, user, i=0, count=0, displayError=True):
       e = e.args[0]
     handleOAuthTokenError(e, True)
     if displayError:
-      entityServiceNotApplicableWarning(Ent.USER, user, i, count)
+      entityServiceNotApplicableWarning(Ent.USER, userEmail, i, count)
     return (userEmail, None)
   return (userEmail, service)
 
