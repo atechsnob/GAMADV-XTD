@@ -22,7 +22,7 @@ For more information, see https://github.com/taers232c/GAMADV-XTD
 """
 
 __author__ = 'Ross Scroggs <ross.scroggs@gmail.com>'
-__version__ = '4.83.10'
+__version__ = '4.83.11'
 __license__ = 'Apache License 2.0 (http://www.apache.org/licenses/LICENSE-2.0)'
 
 import base64
@@ -19561,8 +19561,8 @@ def doPrintShowVaultExports():
 
 ZIP_EXTENSION_PATTERN = re.compile(r'^.*\.zip$', re.IGNORECASE)
 
-# gam download vaultexport|export <ExportItem> matter <MatterItem> [targetfolder <FilePath>] [noverify] [noextract] [ziptostdout]
-# gam download vaultexport|export <MatterItem> <ExportItem> [targetfolder <FilePath>] [noverify] [noextract] [ziptostdout]
+# gam download vaultexport|export <ExportItem> matter <MatterItem> [targetfolder <FilePath>] [targetname <FileName>] [noverify] [noextract] [ziptostdout]
+# gam download vaultexport|export <MatterItem> <ExportItem> [targetfolder <FilePath>] [targetname <FileName>] [noverify] [noextract] [ziptostdout]
 def doDownloadVaultExport():
   def extract_nested_zip(zippedFile):
     """ Extract a zip file including any nested zip files
@@ -19589,6 +19589,7 @@ def doDownloadVaultExport():
   s = buildGAPIObject(API.STORAGE)
   verifyFiles = extractFiles = True
   targetFolder = GC.Values[GC.DRIVE_DIR]
+  targetName = None
   if not Cmd.ArgumentIsAhead('matter'):
     matterId, matterNameId = getMatterItem(v)
     exportId, exportName, exportNameId = convertExportNameToID(v, getString(Cmd.OB_EXPORT_ITEM), matterId, matterNameId)
@@ -19600,6 +19601,8 @@ def doDownloadVaultExport():
     if myarg == 'matter':
       matterId, matterNameId = getMatterItem(v)
       exportId, exportName, exportNameId = convertExportNameToID(v, exportName, matterId, matterNameId)
+    elif myarg == 'targetname':
+      targetName = getString(Cmd.OB_FILE_NAME)
     elif myarg == 'targetfolder':
       targetFolder = os.path.expanduser(getString(Cmd.OB_FILE_PATH))
       if not os.path.isdir(targetFolder):
@@ -19635,6 +19638,8 @@ def doDownloadVaultExport():
     filename = os.path.join(targetFolder, s_object.replace('/', '-'))
     if zipToStdout and not ZIP_EXTENSION_PATTERN.match(filename):
       continue
+    if targetName:
+      filename = targetName
     Act.Set(Act.DOWNLOAD)
     if not zipToStdout:
       performAction(Ent.CLOUD_STORAGE_FILE, s_object, j, jcount)
