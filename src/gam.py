@@ -22,7 +22,7 @@ For more information, see https://github.com/taers232c/GAMADV-XTD
 """
 
 __author__ = 'Ross Scroggs <ross.scroggs@gmail.com>'
-__version__ = '4.85.00'
+__version__ = '4.85.01'
 __license__ = 'Apache License 2.0 (http://www.apache.org/licenses/LICENSE-2.0)'
 
 import base64
@@ -360,6 +360,7 @@ CLIENT_SECRETS_JSON_REQUIRED_RC = 16
 OAUTH2SERVICE_JSON_REQUIRED_RC = 16
 OAUTH2_TXT_REQUIRED_RC = 16
 INVALID_JSON_RC = 17
+JSON_ALREADY_EXISTS_RC = 17
 AUTHENTICATION_TOKEN_REFRESH_ERROR_RC = 18
 HARD_ERROR_RC = 19
 # Information
@@ -5800,6 +5801,11 @@ def ProcessGAMCommandMulti(pid, mpQueueCSVFile, mpQueueStdout, mpQueueStderr, gm
     signal.signal(signal.SIGINT, signal.SIG_IGN)
     GM.Globals = gmGlobals.copy()
   GM.Globals[GM.PID] = pid
+  GM.Globals[GM.SYSEXITRC] = 0
+  GM.Globals[GM.CSV_DATA_DICT] = {}
+  GM.Globals[GM.CSV_KEY_FIELD] = None
+  GM.Globals[GM.CSV_SUBKEY_FIELD] = None
+  GM.Globals[GM.CSV_DATA_FIELD] = None
   GM.Globals[GM.CSVFILE] = {}
   if mpQueueCSVFile:
     GM.Globals[GM.CSVFILE][GM.REDIRECT_QUEUE] = mpQueueCSVFile
@@ -6806,18 +6812,32 @@ def _getLoginHintProjectId(createCmd):
       entityActionFailedExit([Ent.USER, login_hint, Ent.PROJECT, projectId], Msg.DUPLICATE)
   return (crm, httpObj, login_hint, projectId)
 
+def _getCurrentProjectID():
+  cs_data = readFile(GC.Values[GC.CLIENT_SECRETS_JSON], continueOnError=True, displayError=True)
+  if not cs_data:
+    invalidClientSecretsJsonExit()
+  try:
+    return json.loads(cs_data)['installed']['project_id']
+  except (ValueError, IndexError, KeyError):
+    invalidClientSecretsJsonExit()
+
 PROJECTID_FILTER_REQUIRED = 'gam|<ProjectID>|(filter <String>)'
+PROJECTS_FILTER_OPTIONS = ['all', 'gam', 'filter']
+PROJECTS_PRINTSHOW_OPTIONS = ['todrive', 'formatjson', 'quotechar']
 
 def _getLoginHintProjects(printShowCmd):
   login_hint = getEmailAddress(noUid=True, optional=True)
   if login_hint:
     user, _ = splitEmailAddress(login_hint)
-    if user in ['all', 'gam', 'filter'] or PROJECTID_PATTERN.match(user):
+    if user in PROJECTS_FILTER_OPTIONS or user in PROJECTS_PRINTSHOW_OPTIONS or PROJECTID_PATTERN.match(user):
       Cmd.Backup()
       login_hint = None
   pfilter = getString(Cmd.OB_STRING, optional=True)
   if not pfilter:
     pfilter = 'current' if not printShowCmd else 'id:gam-project-*'
+  elif printShowCmd and pfilter in PROJECTS_PRINTSHOW_OPTIONS:
+    pfilter = 'id:gam-project-*'
+    Cmd.Backup()
   elif printShowCmd and pfilter.lower() == 'all':
     pfilter = None
   elif pfilter.lower() == 'gam':
@@ -6833,15 +6853,12 @@ def _getLoginHintProjects(printShowCmd):
     checkForExtraneousArguments()
   login_hint = _getValidateLoginHint(login_hint)
   crm, httpObj = getCRMService(login_hint)
-  if pfilter == 'current':
-    cs_data = readFile(GC.Values[GC.CLIENT_SECRETS_JSON], continueOnError=True, displayError=True)
-    if not cs_data:
-      systemErrorExit(14, 'Your client secrets file: <{0}> is missing; please recreate the file.'.format(GC.Values[GC.CLIENT_SECRETS_JSON]))
-    try:
-      cs_json = json.loads(cs_data)
-      projects = [{'projectId': cs_json['installed']['project_id']}]
-    except (ValueError, IndexError, KeyError):
-      systemErrorExit(3, 'The format of your client secrets file: <{0}> is incorrect; please recreate the file.'.format(GC.Values[GC.CLIENT_SECRETS_JSON]))
+  if pfilter in ['current', 'id:current']:
+    projectID = _getCurrentProjectID()
+    if not printShowCmd:
+      projects = [{'projectId': projectID}]
+    else:
+      projects = _getProjects(crm, 'id:{0}'.format(projectID))
   else:
     projects = _getProjects(crm, pfilter)
   return (crm, httpObj, login_hint, projects)
@@ -6849,7 +6866,7 @@ def _getLoginHintProjects(printShowCmd):
 def _checkForExistingProjectFiles():
   for a_file in [GC.Values[GC.OAUTH2SERVICE_JSON], GC.Values[GC.CLIENT_SECRETS_JSON]]:
     if os.path.exists(a_file):
-      systemErrorExit(5, '{0} already exists. Please delete or rename it before attempting to {1} another project.'.format(a_file, Act.ToPerform()))
+      systemErrorExit(JSON_ALREADY_EXISTS_RC, Msg.AUTHORIZATION_FILE_ALREADY_EXISTS.format(a_file, Act.ToPerform()))
 
 # gam create project [<EmailAddress>] [<ProjectID>]
 def doCreateProject():
