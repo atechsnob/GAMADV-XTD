@@ -1,3 +1,19 @@
+4.85.00
+
+Due to an earlier Google limitation, GAM had to authorize Client access in two steps. That limitation has been eliminated and now GAM can authorize
+Client access in one step. This change requires a one-time update of the client access file oauth2.txt. If you are running any Advanced GAM version before
+`4.85.00`, perform the following command:
+```
+gam oauth update
+```
+If you have multiple sections in `gam.cfg` that reference different oauth2.txt files, perform an update on each section:
+```
+gam select aaa oauth update
+gam select bbb oauth update
+...
+```
+If you do not perform `gam oauth update`, it will be executed automatically on the first command entered.
+
 4.83.14
 
 Due to a recent change to the Google Cloud console, it's no longer necessary to enable Domain-wide delegation
@@ -13,7 +29,7 @@ Fixed bug that caused a trap in `gam show messages` when `showattachements` was 
 
 4.83.11
 
-Added `targetname <FileName>` to `gam download vaultexport|export` so that downloaded Zip file has a predictable name.
+Added `targetname <FileName>` to `gam download vaultexport|export` so that downloaded zip file has a predictable name.
 
 4.83.10
 

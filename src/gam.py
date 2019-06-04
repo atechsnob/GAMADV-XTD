@@ -22,7 +22,7 @@ For more information, see https://github.com/taers232c/GAMADV-XTD
 """
 
 __author__ = 'Ross Scroggs <ross.scroggs@gmail.com>'
-__version__ = '4.83.14'
+__version__ = '4.85.00'
 __license__ = 'Apache License 2.0 (http://www.apache.org/licenses/LICENSE-2.0)'
 
 import base64
@@ -53,6 +53,7 @@ import os
 import platform
 import Queue
 import random
+from random import SystemRandom
 import re
 import shlex
 import signal
@@ -135,31 +136,6 @@ Ind = glindent.GamIndent()
 
 GM.Globals[GM.GAM_PATH] = os.path.dirname(os.path.realpath(__file__)) if not getattr(sys, 'frozen', False) else os.path.dirname(sys.executable)
 
-# Override some oauth2client.tools strings saving us a few GAM-specific mods to oauth2client
-oauth2client.tools._FAILED_START_MESSAGE = """
-Failed to start a local webserver listening on either port 8080
-or port 8090. Please check your firewall settings and locally
-running programs that may be blocking or using those ports.
-
-Falling back to nobrowser.txt  and continuing with
-authorization.
-"""
-
-oauth2client.tools._BROWSER_OPENED_MESSAGE = """
-Your browser has been opened to visit:
-
-    {address}
-
-If your browser is on a different machine then press CTRL+C,
-set no_browser = true in gam.cfg and re-run this command.
-"""
-
-oauth2client.tools._GO_TO_LINK_MESSAGE = """
-Go to the following link in your browser:
-
-    {address}
-"""
-
 GIT_USER = 'taers232c'
 GAM = 'GAMADV-XTD'
 GAM_URL = 'https://github.com/{0}/{1}'.format(GIT_USER, GAM)
@@ -198,6 +174,11 @@ FN_LAST_UPDATE_CHECK_TXT = 'lastupdatecheck.txt'
 FN_GAMCOMMANDS_TXT = 'GamCommands.txt'
 MY_DRIVE = 'My Drive'
 TEAM_DRIVE = 'Drive'
+LOWERNUMERIC_CHARS = string.ascii_lowercase+string.digits
+ALPHANUMERIC_CHARS = LOWERNUMERIC_CHARS+string.ascii_uppercase
+URL_SAFE_CHARS = ALPHANUMERIC_CHARS+'-._~'
+PASSWORD_SAFE_CHARS = ALPHANUMERIC_CHARS+string.punctuation+' '
+FILENAME_SAFE_CHARS = ALPHANUMERIC_CHARS+'-_.() '
 
 # Python 2.7 values
 DEFAULT_CSV_READ_MODE = 'rbU'
@@ -3068,22 +3049,49 @@ def handleOAuthTokenError(e, soft_errors):
   stderrErrorMsg('Authentication Token Error - {0}'.format(errMsg))
   APIAccessDeniedExit()
 
-def getCredentialsForScope(cred_family, filename=None, storageOnly=False):
+def getOldOauth2TxtCredentials(credFamily):
   try:
-    storage = MultiprocessFileStorage(filename or GC.Values[GC.OAUTH2_TXT], cred_family)
-    if storageOnly:
-      return storage
-    return storage.get()
+    storage = MultiprocessFileStorage(GC.Values[GC.OAUTH2_TXT], credFamily)
+    return (storage, storage.get())
   except (KeyError, ValueError):
-    return None
+    return (None, None)
   except IOError as e:
     systemErrorExit(FILE_ERROR_RC, e)
 
-def getClientCredentials(cred_family):
-  credentials = getCredentialsForScope(cred_family)
+def getOauth2TxtCredentials(storageOnly=False, updateOnError=True):
+  while True:
+    try:
+      storage = MultiprocessFileStorage(GC.Values[GC.OAUTH2_TXT], API.GAM_SCOPES)
+      if storageOnly:
+        return storage
+      credentials = storage.get()
+      if credentials:
+        return credentials
+    except (KeyError, ValueError):
+      pass
+    except IOError as e:
+      systemErrorExit(FILE_ERROR_RC, e)
+    if not updateOnError:
+      return None
+    try:
+      MultiprocessFileStorage(GC.Values[GC.OAUTH2_TXT], API.FAM1_SCOPES).get()
+      action = Act.Get()
+      Act.Set(Act.UPDATE)
+      entityPerformAction([Ent.OAUTH2_TXT_FILE, GC.Values[GC.OAUTH2_TXT]])
+      doOAuthUpdate()
+      Act.Set(action)
+      continue
+    except (KeyError, ValueError):
+      if not updateOnError:
+        return None
+    except IOError as e:
+      systemErrorExit(FILE_ERROR_RC, e)
+
+def getClientCredentials(forceRefresh=False):
+  credentials = getOauth2TxtCredentials()
   if not credentials or credentials.invalid:
     invalidOauth2TxtExit()
-  if credentials.access_token_expired:
+  if credentials.access_token_expired or forceRefresh:
     try:
       credentials.refresh(getHttpObj())
     except (httplib2.ServerNotFoundError, google.auth.exceptions.TransportError) as e:
@@ -3096,7 +3104,9 @@ def getClientCredentials(cred_family):
   return credentials
 
 def _getValueFromOAuth(field):
-  return getClientCredentials(API.FAM1_SCOPES).id_token.get(field, 'Unknown')
+  if not GM.Globals[GM.DECODED_ID_TOKEN]:
+    GM.Globals[GM.DECODED_ID_TOKEN] = getClientCredentials().id_token
+  return GM.Globals[GM.DECODED_ID_TOKEN].get(field, 'Unknown')
 
 def getSvcAcctCredentials(scopes, act_as):
   try:
@@ -3116,7 +3126,7 @@ def getSvcAcctCredentials(scopes, act_as):
 
 def getGDataOAuthToken(gdataObj, credentials=None):
   if not credentials:
-    credentials = getClientCredentials(API.FAM2_SCOPES)
+    credentials = getClientCredentials()
   try:
     credentials.refresh(getHttpObj())
   except (httplib2.ServerNotFoundError, google.auth.exceptions.TransportError) as e:
@@ -3619,13 +3629,13 @@ DISCOVERY_URIS = [googleapiclient.discovery.V1_DISCOVERY_URI, googleapiclient.di
 
 def getAPIversionHttpService(api):
   hasLocalJSON = API.hasLocalJSON(api)
-  api, version, api_version, v2discovery, cred_family = API.getVersion(api)
+  api, version, api_version, v2discovery = API.getVersion(api)
   httpObj = getHttpObj(cache=GM.Globals[GM.CACHE_DIR])
   if api in GM.Globals[GM.CURRENT_API_SERVICES] and version in GM.Globals[GM.CURRENT_API_SERVICES][api]:
     service = googleapiclient.discovery.build_from_document(GM.Globals[GM.CURRENT_API_SERVICES][api][version], http=httpObj)
     if GM.Globals[GM.CACHE_DISCOVERY_ONLY]:
       httpObj.cache = None
-    return (api_version, httpObj, service, cred_family)
+    return (api_version, httpObj, service)
   if not hasLocalJSON:
     retries = 3
     for n in range(1, retries+1):
@@ -3636,7 +3646,7 @@ def getAPIversionHttpService(api):
         GM.Globals[GM.CURRENT_API_SERVICES][api][version] = service._rootDesc.copy()
         if GM.Globals[GM.CACHE_DISCOVERY_ONLY]:
           httpObj.cache = None
-        return (api_version, httpObj, service, cred_family)
+        return (api_version, httpObj, service)
       except googleapiclient.errors.UnknownApiNameOrVersion as e:
         systemErrorExit(GOOGLE_API_ERROR_RC, Msg.UNKNOWN_API_OR_VERSION.format(str(e), __author__))
       except (googleapiclient.errors.InvalidJsonError, KeyError, ValueError):
@@ -3662,22 +3672,22 @@ def getAPIversionHttpService(api):
     GM.Globals[GM.CURRENT_API_SERVICES][api][version] = service._rootDesc.copy()
     if GM.Globals[GM.CACHE_DISCOVERY_ONLY]:
       httpObj.cache = None
-    return (api_version, httpObj, service, cred_family)
+    return (api_version, httpObj, service)
   except (KeyError, ValueError):
     invalidDiscoveryJsonExit(disc_file)
   except IOError as e:
     systemErrorExit(FILE_ERROR_RC, str(e))
 
 def buildGAPIObject(api):
-  _, httpObj, service, cred_family = getAPIversionHttpService(api)
-  credentials = getClientCredentials(cred_family)
+  _, httpObj, service = getAPIversionHttpService(api)
+  credentials = getClientCredentials()
   try:
     API_Scopes = set(list(service._rootDesc['auth']['oauth2']['scopes']))
   except KeyError:
     API_Scopes = set(API.VAULT_SCOPES) if api == API.VAULT else set()
   GM.Globals[GM.CURRENT_CLIENT_API] = api
   GM.Globals[GM.CURRENT_CLIENT_API_SCOPES] = API_Scopes.intersection(credentials.scopes)
-  if not GM.Globals[GM.CURRENT_CLIENT_API_SCOPES]:
+  if api != API.OAUTH2 and not GM.Globals[GM.CURRENT_CLIENT_API_SCOPES]:
     systemErrorExit(NO_SCOPES_FOR_API_RC, Msg.NO_SCOPES_FOR_API.format(service._rootDesc['title']))
   try:
     service._http = credentials.authorize(httpObj)
@@ -3720,7 +3730,7 @@ google_auth_httplib2.AuthorizedHttp.request = _request_with_user_agent(google_au
 
 def buildGAPIServiceObject(api, user, i=0, count=0, displayError=True):
   userEmail = convertUIDtoEmailAddress(user)
-  _, httpObj, service, _ = getAPIversionHttpService(api)
+  _, httpObj, service = getAPIversionHttpService(api)
   GM.Globals[GM.CURRENT_SVCACCT_API] = api
   GM.Globals[GM.CURRENT_SVCACCT_API_SCOPES] = API.getSvcAcctScopesSet(api)
   GM.Globals[GM.CURRENT_SVCACCT_USER] = userEmail
@@ -3741,10 +3751,10 @@ def buildGAPIServiceObject(api, user, i=0, count=0, displayError=True):
   return (userEmail, service)
 
 def initGDataObject(gdataObj, api):
-  _, _, api_version, _, cred_family = API.getVersion(api)
+  _, _, api_version, _ = API.getVersion(api)
   disc_file, discovery = readDiscoveryFile(api_version)
   GM.Globals[GM.CURRENT_CLIENT_API] = api
-  credentials = getClientCredentials(cred_family)
+  credentials = getClientCredentials()
   try:
     GM.Globals[GM.CURRENT_CLIENT_API_SCOPES] = set(list(discovery['auth']['oauth2']['scopes'])).intersection(credentials.scopes)
   except KeyError:
@@ -3758,12 +3768,12 @@ def initGDataObject(gdataObj, api):
 
 def getGDataUserCredentials(api, user, i, count):
   userEmail = convertUIDtoEmailAddress(user)
-  _, _, api_version, _, cred_family = API.getVersion(api)
+  _, _, api_version, _ = API.getVersion(api)
   disc_file, discovery = readDiscoveryFile(api_version)
   GM.Globals[GM.CURRENT_SVCACCT_API] = api
   GM.Globals[GM.CURRENT_SVCACCT_API_SCOPES] = set(list(discovery['auth']['oauth2']['scopes']))
   GM.Globals[GM.CURRENT_SVCACCT_USER] = userEmail
-  credentials = getClientCredentials(cred_family)
+  credentials = getClientCredentials()
   try:
     GM.Globals[GM.CURRENT_SVCACCT_API_SCOPES] = GM.Globals[GM.CURRENT_SVCACCT_API_SCOPES].intersection(credentials.scopes)
   except KeyError:
@@ -6195,17 +6205,25 @@ def doListCrOS(entityList):
 def doListUser(entityList):
   _doList(entityList, Cmd.ENTITY_USERS)
 
-def revokeCredentials(credFamilyList):
-  httpObj = getHttpObj()
-  for cred_family in credFamilyList:
-    credentials = getCredentialsForScope(cred_family)
-    if credentials and not credentials.invalid:
+def revokeCredentials():
+  def _revoke(credFamily):
+    storage, credentials = getOldOauth2TxtCredentials(credFamily)
+    storage.delete()
+    if credentials:
       credentials.revoke_uri = oauth2client.GOOGLE_REVOKE_URI
       try:
         credentials.revoke(httpObj)
         time.sleep(2)
+        return True
       except oauth2client.client.TokenRevokeError as e:
         printErrorMessage(INVALID_TOKEN_RC, str(e))
+    return False
+
+  httpObj = getHttpObj()
+  if _revoke(API.GAM_SCOPES):
+    return
+  _revoke(API.FAM1_SCOPES)
+  _revoke(API.FAM2_SCOPES)
 
 VALIDEMAIL_PATTERN = re.compile(r'^[^@]+@[^@]+\.[^@]+$')
 
@@ -6232,7 +6250,7 @@ def getOAuthClientIDAndSecret():
   except (ValueError, IndexError, KeyError):
     invalidClientSecretsJsonExit()
 
-def getScopesFromUser():
+def getScopesFromUser(currentScopes=None):
   OAUTH2_CMDS = ['s', 'u', 'e', 'c']
   oauth2_menu = '''
 Select the authorized scopes by entering a number.
@@ -6253,34 +6271,34 @@ Append an 'r' to grant read-only access or an 'a' to grant action-only access.
   num_scopes = len(API.OAUTH2_SCOPES)
   menu = oauth2_menu % tuple(range(num_scopes))
   selectedScopes = ['*'] * num_scopes
-  for cred_family in API.FAM_LIST:
-    credentials = getCredentialsForScope(cred_family)
+  if currentScopes is None:
+    credentials = getOauth2TxtCredentials(updateOnError=False)
     if credentials and not credentials.invalid:
-      currentScopes = sorted(credentials.scopes)
-      i = 0
-      for a_scope in API.OAUTH2_SCOPES:
-        if cred_family == a_scope['credfam']:
-          selectedScopes[i] = ' '
-          possibleScope = a_scope['scope']
-          for currentScope in currentScopes:
-            if currentScope == possibleScope:
-              selectedScopes[i] = '*'
-              break
-            if 'readonly' in a_scope['subscopes']:
-              if currentScope == possibleScope+'.readonly':
-                selectedScopes[i] = 'R'
-                break
-            if 'action' in a_scope['subscopes']:
-              if currentScope == possibleScope+'.action':
-                selectedScopes[i] = 'A'
-                break
-        i += 1
-    else:
-      i = 0
-      for a_scope in API.OAUTH2_SCOPES:
-        if cred_family == a_scope['credfam']:
-          selectedScopes[i] = ' ' if a_scope.get('offByDefault', False) else '*'
-        i += 1
+      if credentials.scopes is not None:
+        currentScopes = sorted(credentials.scopes)
+  if currentScopes:
+    i = 0
+    for a_scope in API.OAUTH2_SCOPES:
+      selectedScopes[i] = ' '
+      possibleScope = a_scope['scope']
+      for currentScope in currentScopes:
+        if currentScope == possibleScope:
+          selectedScopes[i] = '*'
+          break
+        if 'readonly' in a_scope['subscopes']:
+          if currentScope == possibleScope+'.readonly':
+            selectedScopes[i] = 'R'
+            break
+        if 'action' in a_scope['subscopes']:
+          if currentScope == possibleScope+'.action':
+            selectedScopes[i] = 'A'
+            break
+      i += 1
+  else:
+    i = 0
+    for a_scope in API.OAUTH2_SCOPES:
+      selectedScopes[i] = ' ' if a_scope.get('offByDefault', False) else '*'
+      i += 1
   prompt = 'Please enter 0-{0}[a|r] or {1}: '.format(num_scopes-1, '|'.join(OAUTH2_CMDS))
   while True:
     os.system(['clear', 'cls'][GM.Globals[GM.WINDOWS]])
@@ -6337,122 +6355,161 @@ class cmd_flags(object):
     self.auth_host_name = 'localhost'
     self.auth_host_port = [8080, 9090]
 
+def _run_oauth_flow(client_id, client_secret, scopes, login_hint, access_type, storage):
+# Override some oauth2client.tools strings saving us a few GAM-specific mods to oauth2client
+  oauth2client.tools._FAILED_START_MESSAGE = Msg.OAUTH2_FAILED_START_MESSAGE
+  oauth2client.tools._BROWSER_OPENED_MESSAGE = Msg.OAUTH2_BROWSER_OPENED_MESSAGE
+  oauth2client.tools._GO_TO_LINK_MESSAGE = Msg.OAUTH2_GO_TO_LINK_MESSAGE
+  flow = oauth2client.client.OAuth2WebServerFlow(client_id=client_id, client_secret=client_secret, scope=scopes,
+                                                 redirect_uri=oauth2client.client.OOB_CALLBACK_URN, login_hint=login_hint,
+                                                 user_agent=GAM_INFO, access_type=access_type, response_type='code')
+  try:
+    return oauth2client.tools.run_flow(flow=flow, storage=storage,
+                                       flags=cmd_flags(noLocalWebserver=GC.Values[GC.NO_BROWSER]), http=getHttpObj())
+  except httplib2.CertificateValidationUnsupported:
+    noPythonSSLExit()
+
 # gam oauth|oauth2 create|request [<EmailAddress>]
-def doOAuthRequest():
+def doOAuthRequest(currentScopes=None):
   client_id, client_secret = getOAuthClientIDAndSecret()
   login_hint = getEmailAddress(noUid=True, optional=True)
   checkForExtraneousArguments()
-  selectedScopes = getScopesFromUser()
+  selectedScopes = getScopesFromUser(currentScopes)
   if selectedScopes is None:
-    return
+    return False
   login_hint = _getValidateLoginHint(login_hint)
-  revokeCredentials(API.FAM_LIST)
-  flags = cmd_flags(noLocalWebserver=GC.Values[GC.NO_BROWSER])
-  httpObj = getHttpObj()
-  for cred_family in API.FAM_LIST:
-    scopes = [API.EMAIL_SCOPE, API.PROFILE_SCOPE] # Email Display Scope, always included for client
-    i = 0
-    for a_scope in API.OAUTH2_SCOPES:
-      if cred_family == a_scope['credfam']:
-        if selectedScopes[i] == '*':
-          scopes.append(a_scope['scope'])
-        elif selectedScopes[i] == 'R':
-          scopes.append('{0}.readonly'.format(a_scope['scope']))
-        elif selectedScopes[i] == 'A':
-          scopes.append('{0}.action'.format(a_scope['scope']))
-      i += 1
-    flow = oauth2client.client.OAuth2WebServerFlow(client_id=client_id,
-                                                   client_secret=client_secret, scope=scopes, redirect_uri=oauth2client.client.OOB_CALLBACK_URN,
-                                                   user_agent=GAM_INFO, response_type='code', login_hint=login_hint)
-    storage = getCredentialsForScope(cred_family, storageOnly=True)
-    try:
-      oauth2client.tools.run_flow(flow=flow, storage=storage, flags=flags, http=httpObj)
-      time.sleep(3)
-    except httplib2.CertificateValidationUnsupported:
-      noPythonSSLExit()
+  revokeCredentials()
+  scopes = API.REQUIRED_SCOPES[:] # Email Display Scope, always included for client
+  i = 0
+  for a_scope in API.OAUTH2_SCOPES:
+    if selectedScopes[i] == '*':
+      scopes.append(a_scope['scope'])
+    elif selectedScopes[i] == 'R':
+      scopes.append('{0}.readonly'.format(a_scope['scope']))
+    elif selectedScopes[i] == 'A':
+      scopes.append('{0}.action'.format(a_scope['scope']))
+    i += 1
+  storage = getOauth2TxtCredentials(storageOnly=True)
+  _run_oauth_flow(client_id, client_secret, scopes, login_hint, 'offline', storage)
   entityActionPerformed([Ent.OAUTH2_TXT_FILE, GC.Values[GC.OAUTH2_TXT]])
+  return True
 
-CRED_FAMILY_CHOICE_MAP = ['current', 'previous']
+def exitIfNoOauth2Txt():
+  if not os.path.isfile(GC.Values[GC.OAUTH2_TXT]):
+    entityActionNotPerformedWarning([Ent.OAUTH2_TXT_FILE, GC.Values[GC.OAUTH2_TXT]], Msg.DOES_NOT_EXIST)
+    sys.exit(GM.Globals[GM.SYSEXITRC])
 
 # gam oauth|oauth2 delete|revoke
 def doOAuthDelete():
-  currPrev = getChoice(CRED_FAMILY_CHOICE_MAP, defaultChoice=None)
   checkForExtraneousArguments()
-  if os.path.isfile(GC.Values[GC.OAUTH2_TXT]):
-    if currPrev is None:
-      entityType = Ent.OAUTH2_TXT_FILE
-      entityName = GC.Values[GC.OAUTH2_TXT]
-    else:
-      entityType = Ent.CREDENTIALS
-      entityName = currPrev
-    sys.stdout.write('{0}: {1}, will be Deleted in 3...'.format(Ent.Singular(entityType), entityName))
-    sys.stdout.flush()
-    time.sleep(1)
-    sys.stdout.write('2...')
-    sys.stdout.flush()
-    time.sleep(1)
-    sys.stdout.write('1...')
-    sys.stdout.flush()
-    time.sleep(1)
-    sys.stdout.write('boom!\n')
-    sys.stdout.flush()
-    if currPrev == 'current':
-      revokeCredentials(API.FAM_LIST)
-    elif currPrev == 'previous':
-      revokeCredentials(API.PREV_FAM_LIST)
-    else:
-      revokeCredentials(API.FAM_LIST)
-      revokeCredentials(API.PREV_FAM_LIST)
-      deleteFile(GC.Values[GC.OAUTH2_TXT], continueOnError=True)
-    entityActionPerformed([entityType, entityName])
+  exitIfNoOauth2Txt()
+  entityType = Ent.OAUTH2_TXT_FILE
+  entityName = GC.Values[GC.OAUTH2_TXT]
+  sys.stdout.write('{0}: {1}, will be Deleted in 3...'.format(Ent.Singular(entityType), entityName))
+  sys.stdout.flush()
+  time.sleep(1)
+  sys.stdout.write('2...')
+  sys.stdout.flush()
+  time.sleep(1)
+  sys.stdout.write('1...')
+  sys.stdout.flush()
+  time.sleep(1)
+  sys.stdout.write('boom!\n')
+  sys.stdout.flush()
+  revokeCredentials()
+  deleteFile(GC.Values[GC.OAUTH2_TXT], continueOnError=True)
+  entityActionPerformed([entityType, entityName])
 
-# gam oauth|oauth2 info [<AccessToken>]
+# gam oauth|oauth2 info|verify [showsecret] [accesstoken <AccessToken> idtoken <IDToken>] [showdetails]
 def doOAuthInfo():
-
-  def _printCredentials(credentials):
-    if not credentials or credentials.invalid:
-      return
-    printKeyValueList(['Client ID', credentials.client_id])
+  credentials = access_token = id_token = None
+  showDetails = showSecret = False
+  while Cmd.ArgumentsRemaining():
+    myarg = getArgument()
+    if myarg == 'accesstoken':
+      access_token = getString(Cmd.OB_ACCESS_TOKEN)
+    elif myarg == 'idtoken':
+      id_token = getString(Cmd.OB_ID_TOKEN)
+    elif myarg == 'showdetails':
+      showDetails = True
+    elif myarg == 'showsecret':
+      showSecret = True
+    else:
+      unknownArgumentExit()
+  exitIfNoOauth2Txt()
+  if not access_token and not id_token:
+    credentials = getClientCredentials()
+    access_token = credentials.access_token
+    printEntity([Ent.OAUTH2_TXT_FILE, GC.Values[GC.OAUTH2_TXT]])
+  oa2 = buildGAPIObject(API.OAUTH2)
+  token_info = callGAPI(oa2, 'tokeninfo',
+                        access_token=access_token, id_token=id_token)
+  if 'issued_to' in token_info:
+    printKeyValueList(['Client ID', token_info['issued_to']])
+  if credentials is not None and showSecret:
     printKeyValueList(['Secret', credentials.client_secret])
-    scopes = sorted(credentials.scopes)
-    for scope in [API.EMAIL_SCOPE, API.PROFILE_SCOPE]:
-      if scope in scopes:
-        scopes.remove(scope)
+  if 'scope' in token_info:
+    scopes = token_info['scope'].split(' ')
     printKeyValueList(['Scopes', len(scopes)])
     Ind.Increment()
-    for scope in scopes:
+    for scope in sorted(scopes):
       printKeyValueList([scope])
     Ind.Decrement()
-    printKeyValueList(['G Suite Admin', credentials.id_token.get('email', 'Unknown')])
-    printBlankLine()
+  if 'email' in token_info:
+    printKeyValueList(['G Suite Admin', '{0}'.format(token_info['email'])])
+  if 'expires_in' in token_info:
+    printKeyValueList(['Expires', ISOformatTimeStamp((datetime.datetime.now()+datetime.timedelta(seconds=token_info['expires_in'])).replace(tzinfo=GC.Values[GC.TIMEZONE]))])
+  if showDetails:
+    for k, v in sorted(iteritems(token_info)):
+      if k not in  ['email', 'expires_in', 'issued_to', 'scope']:
+        printKeyValueList([k, v])
+  printBlankLine()
 
-  access_token = getString(Cmd.OB_ACCESS_TOKEN, optional=True)
+# gam oauth|oauth2 update
+def doOAuthUpdate():
   checkForExtraneousArguments()
-  if access_token:
-    for cred_family in API.FAM_LIST:
-      credentials = getClientCredentials(cred_family)
-      if credentials.access_token == access_token:
-        _printCredentials(credentials)
-        break
-    else:
-      entityActionFailedWarning([Ent.ACCESS_TOKEN, access_token], Msg.DOES_NOT_EXIST)
-  else:
-    if os.path.isfile(GC.Values[GC.OAUTH2_TXT]):
-      printEntity([Ent.OAUTH2_TXT_FILE, GC.Values[GC.OAUTH2_TXT]])
-      fam1Credentials = getCredentialsForScope(API.FAM1_SCOPES)
-      fam2Credentials = getCredentialsForScope(API.FAM2_SCOPES)
-      if (fam1Credentials and not fam1Credentials.invalid and
-          fam2Credentials and not fam2Credentials.invalid and
-          fam1Credentials.client_id == fam2Credentials.client_id and
-          fam1Credentials.client_secret == fam2Credentials.client_secret and
-          fam1Credentials.id_token.get(API.EMAIL_SCOPE) == fam2Credentials.id_token.get(API.EMAIL_SCOPE)):
-        fam1Credentials.scopes = fam1Credentials.scopes.union(fam2Credentials.scopes)
-        _printCredentials(fam1Credentials)
+  exitIfNoOauth2Txt()
+  jsonData = readFile(GC.Values[GC.OAUTH2_TXT], continueOnError=True, displayError=False)
+  if not jsonData:
+    invalidOauth2TxtExit()
+  try:
+    jsonDict = json.loads(jsonData)
+    if 'client_id' in jsonDict:
+      currentScopes = jsonDict.get('scopes', [])
+    elif ((jsonDict.get('file_version') == 2) and ('credentials' in jsonDict) and
+          (API.GAM_SCOPES in jsonDict['credentials'])):
+      _, importCredentials = getOldOauth2TxtCredentials(API.GAM_SCOPES)
+      if importCredentials:
+        currentScopes = list(importCredentials.scopes)
       else:
-        _printCredentials(fam1Credentials)
-        _printCredentials(fam2Credentials)
+        invalidOauth2TxtExit()
+    elif ((jsonDict.get('file_version') == 2) and ('credentials' in jsonDict) and
+          (API.FAM1_SCOPES in jsonDict['credentials']) and (API.FAM2_SCOPES in jsonDict['credentials'])):
+      backup = GC.Values[GC.OAUTH2_TXT]+'.bak'
+      if not os.path.isfile(backup):
+        writeFile(backup, jsonData)
+      storage1, import1Credentials = getOldOauth2TxtCredentials(API.FAM1_SCOPES)
+      storage2, import2Credentials = getOldOauth2TxtCredentials(API.FAM2_SCOPES)
+      if import1Credentials and import2Credentials:
+        currentScopes = list(import1Credentials.scopes.union(import2Credentials.scopes))
+        storage1.delete()
+        storage2.delete()
+      else:
+        invalidOauth2TxtExit()
     else:
-      invalidOauth2TxtExit()
+      currentScopes = []
+  except (ValueError, IndexError, KeyError):
+    invalidOauth2TxtExit()
+  if not doOAuthRequest(currentScopes):
+    entityActionNotPerformedWarning([Ent.OAUTH2_TXT_FILE, GC.Values[GC.OAUTH2_TXT]], Msg.USER_CANCELLED)
+    sys.exit(GM.Globals[GM.SYSEXITRC])
+
+# gam oauth|oauth2 refresh
+def doOAuthRefresh():
+  checkForExtraneousArguments()
+  exitIfNoOauth2Txt()
+  getClientCredentials(forceRefresh=True)
+  entityActionPerformed([Ent.OAUTH2_TXT_FILE, GC.Values[GC.OAUTH2_TXT]])
 
 # gam oauth|oauth2 export [<FileName>]
 def doOAuthExport():
@@ -6461,28 +6518,31 @@ def doOAuthExport():
     checkForExtraneousArguments()
   else:
     exportFile = None
-  oauth2Export = {}
-  if os.path.isfile(GC.Values[GC.OAUTH2_TXT]):
-    for cred_family in API.FAM_LIST:
-      credentials = getCredentialsForScope(cred_family)
-      if credentials and not credentials.invalid:
-        oauth2Export[cred_family] = {'_module': 'oauth2client.client',
-                                     '_class': 'OAuth2Credentials',
-                                     'access_token': credentials.access_token,
-                                     'client_id': credentials.client_id,
-                                     'client_secret': credentials.client_secret,
-                                     'id_token': credentials.id_token,
-                                     'id_token_jwt': credentials.id_token_jwt,
-                                     'invalid': credentials.invalid,
-                                     'refresh_token': credentials.refresh_token,
-                                     'revoke_uri': credentials.revoke_uri,
-                                     'scopes': sorted(list(credentials.scopes)),
-                                     'token_expiry': datetime.datetime.strftime(credentials.token_expiry, '%Y-%m-%dT%H:%M:%SZ'),
-                                     'token_info_uri': credentials.token_info_uri,
-                                     'token_uri': credentials.token_uri,
-                                     'user_agent': credentials.user_agent}
-      else:
-        invalidOauth2TxtExit()
+  exitIfNoOauth2Txt()
+  credentials = getOauth2TxtCredentials()
+  if credentials:
+    oauth2Export = {
+      'file_version': 2,
+      'credentials': {
+        API.GAM_SCOPES: {
+          '_module': 'oauth2client.client',
+          '_class': 'OAuth2Credentials',
+          'access_token': credentials.access_token,
+          'client_id': credentials.client_id,
+          'client_secret': credentials.client_secret,
+          'id_token': credentials.id_token,
+          'id_token_jwt': credentials.id_token_jwt,
+          'invalid': credentials.invalid,
+          'refresh_token': credentials.refresh_token,
+          'revoke_uri': credentials.revoke_uri,
+          'scopes': sorted(list(credentials.scopes)),
+          'token_expiry': datetime.datetime.strftime(credentials.token_expiry, '%Y-%m-%dT%H:%M:%SZ'),
+          'token_info_uri': credentials.token_info_uri,
+          'token_uri': credentials.token_uri,
+          'user_agent': credentials.user_agent,
+          }
+        }
+      }
   else:
     invalidOauth2TxtExit()
   if exportFile:
@@ -6493,34 +6553,23 @@ def doOAuthExport():
 
 # gam oauth|oauth2 import <FileName>
 def doOAuthImport():
-  importFile = getString(Cmd.OB_FILE_NAME)
+  filename = getString(Cmd.OB_FILE_NAME)
   checkForExtraneousArguments()
-  jsonData = readFile(importFile, mode='rb')
+  jsonData = readFile(filename, mode='rb', continueOnError=True, displayError=False)
   try:
     jsonDict = json.loads(jsonData)
-    if 'client_id' in jsonDict:
-      importCredentials = oauth2client.client.Credentials.new_from_json(jsonData)
+    if ((jsonDict.get('file_version') == 2) and ('credentials' in jsonDict) and
+        (API.GAM_SCOPES in jsonDict['credentials'])):
+      importCredentials = oauth2client.client.Credentials.new_from_json(json.dumps(jsonDict['credentials'][API.GAM_SCOPES],
+                                                                                   ensure_ascii=False, sort_keys=True))
       if not importCredentials or importCredentials.invalid:
-        invalidOauth2TxtImportExit(importFile)
-      for cred_family in API.FAM_LIST:
-        getCredentialsForScope(cred_family, storageOnly=True).put(importCredentials)
-    elif ('credentials' in jsonDict) and (jsonDict.get('file_version') == 2):
-      for cred_family in API.FAM_LIST:
-        importCredentials = getCredentialsForScope(cred_family, filename=importFile)
-        if not importCredentials or importCredentials.invalid:
-          invalidOauth2TxtImportExit(importFile)
-        getCredentialsForScope(cred_family, storageOnly=True).put(importCredentials)
-    elif (API.FAM1_SCOPES in jsonDict) and (API.FAM2_SCOPES in jsonDict):
-      for cred_family in API.FAM_LIST:
-        importCredentials = oauth2client.client.Credentials.new_from_json(json.dumps(jsonDict[cred_family], ensure_ascii=False, sort_keys=True))
-        if not importCredentials or importCredentials.invalid:
-          invalidOauth2TxtImportExit(importFile)
-        getCredentialsForScope(cred_family, storageOnly=True).put(importCredentials)
+        invalidOauth2TxtImportExit(filename)
+      getOauth2TxtCredentials(storageOnly=True).put(importCredentials)
     else:
-      invalidOauth2TxtImportExit(importFile)
+      invalidOauth2TxtImportExit(filename)
   except (KeyError, ValueError):
-    invalidOauth2TxtImportExit(importFile)
-  entityModifierNewValueActionPerformed([Ent.OAUTH2_TXT_FILE, GC.Values[GC.OAUTH2_TXT]], Act.MODIFIER_FROM, importFile)
+    invalidOauth2TxtImportExit(filename)
+  entityModifierNewValueActionPerformed([Ent.OAUTH2_TXT_FILE, GC.Values[GC.OAUTH2_TXT]], Act.MODIFIER_FROM, filename)
 
 # gam <UserTypeEntity> check serviceaccount
 def checkServiceAccount(users):
@@ -6560,20 +6609,12 @@ def checkServiceAccount(users):
     printBlankLine()
 
 def getCRMService(login_hint):
-  scope = 'https://www.googleapis.com/auth/cloud-platform'
+  scopes = ['https://www.googleapis.com/auth/cloud-platform']
   client_id = '297408095146-fug707qsjv4ikron0hugpevbrjhkmsk7.apps.googleusercontent.com'
   client_secret = 'qM3dP8f_4qedwzWQE1VR4zzU'
-  flow = oauth2client.client.OAuth2WebServerFlow(client_id=client_id,
-                                                 client_secret=client_secret, scope=scope, redirect_uri=oauth2client.client.OOB_CALLBACK_URN,
-                                                 user_agent=GAM_INFO, access_type='online', response_type='code', login_hint=login_hint)
   storage_dict = {}
   storage = DictionaryStorage(storage_dict, 'credentials')
-  flags = cmd_flags(noLocalWebserver=GC.Values[GC.NO_BROWSER])
-  httpObj = getHttpObj()
-  try:
-    credentials = oauth2client.tools.run_flow(flow=flow, storage=storage, flags=flags, http=httpObj)
-  except httplib2.CertificateValidationUnsupported:
-    noPythonSSLExit()
+  credentials = _run_oauth_flow(client_id, client_secret, scopes, login_hint, 'online', storage)
   credentials.user_agent = GAM_INFO
   httpObj = credentials.authorize(getHttpObj())
   return (googleapiclient.discovery.build('cloudresourcemanager', 'v1',
@@ -6639,7 +6680,7 @@ def enableGAMProjectAPIs(httpObj, projectId, checkEnabled, i=0, count=0):
 def _createClientSecretsOauth2service(httpObj, projectId):
 
   def _checkClientAndSecret(csHttpObj, client_id, client_secret):
-    url = 'https://www.googleapis.com/oauth2/v4/token'
+    url = 'https://oauth2.googleapis.com/token'
     post_data = {'client_id': client_id, 'client_secret': client_secret,
                  'code': 'ThisIsAnInvalidCodeOnlyBeingUsedToTestIfClientAndSecretAreValid',
                  'redirect_uri': 'urn:ietf:wg:oauth:2.0:oob', 'grant_type': 'authorization_code'}
@@ -6705,15 +6746,12 @@ def _createClientSecretsOauth2service(httpObj, projectId):
   cs_data = '''{
     "installed": {
         "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+        "auth_uri": "https://accounts.google.com/o/oauth2/v2/auth",
         "client_id": "%s",
         "client_secret": "%s",
         "project_id": "%s",
-        "redirect_uris": [
-            "urn:ietf:wg:oauth:2.0:oob",
-            "http://localhost"
-        ],
-        "token_uri": "https://accounts.google.com/o/oauth2/token"
+        "redirect_uris": ["http://localhost", "urn:ietf:wg:oauth:2.0:oob"],
+        "token_uri": "https://oauth2.googleapis.com/token"
     }
 }''' % (client_id, client_secret, projectId)
   writeFile(GC.Values[GC.CLIENT_SECRETS_JSON], cs_data, continueOnError=False)
@@ -6749,7 +6787,7 @@ def _getLoginHintProjectId(createCmd):
   elif createCmd:
     projectId = 'gam-project'
     for _ in range(3):
-      projectId += '-{0}'.format(''.join(random.sample(string.digits+string.ascii_lowercase, 3)))
+      projectId += '-{0}'.format(''.join(random.choice(LOWERNUMERIC_CHARS) for _ in range(3)))
   else:
     projectId = readStdin('\nWhat is your API project ID? ').strip()
     if not PROJECTID_PATTERN.match(projectId):
@@ -16869,6 +16907,7 @@ BUILDINGS_FIELDS_CHOICE_MAP = {
   'id': 'buildingId',
   'name': 'buildingName',
   }
+BUILDINGS_SORT_TITLES = ['buildingId', 'buildingName', 'description', 'floorNames']
 
 # gam print buildings [todrive <ToDriveAttributes>*] [allfields|<BuildingFildName>*|(fields <BuildingFieldNameList>)]
 #	[delimiter <Character>]
@@ -16924,7 +16963,7 @@ def doPrintShowBuildings():
         building['coordinates']['longitude'] = '{0:4.7f}'.format(building['coordinates'].get('longitude', 0))
       addRowTitlesToCSVfile(flattenJSON(building), csvRows, titles)
   if csvFormat:
-    writeCSVfile(csvRows, titles, 'Buildings', todrive, ['buildingId'])
+    writeCSVfile(csvRows, titles, 'Buildings', todrive, BUILDINGS_SORT_TITLES)
 
 def _getFeatureAttributes(body):
   while Cmd.ArgumentsRemaining():
@@ -18337,9 +18376,11 @@ def _moveCalendarEvents(origUser, user, cal, calIds, count, calendarEventEntity,
         break
     Ind.Decrement()
 
+EVENT_SHOW_ORDER = ['id', 'summary', 'status', 'description', 'location',
+                    'start', 'end', 'endTimeUnspecified',
+                    'creator', 'organizer', 'created', 'updated', 'iCalUID']
 EVENT_PRINT_ORDER = ['id', 'summary', 'status', 'description', 'location',
-                     'start', 'end', 'endTimeUnspecified',
-                     'creator', 'organizer', 'created', 'updated', 'iCalUID']
+                     'created', 'updated', 'iCalUID']
 
 EVENT_TIME_OBJECTS = set(['created', 'updated', 'dateTime'])
 
@@ -18355,7 +18396,7 @@ def _showCalendarEvent(primaryEmail, calId, eventEntityType, event, k, kcount, F
   printEntity([eventEntityType, event['id']], k, kcount)
   skipObjects = set(['id'])
   Ind.Increment()
-  for field in EVENT_PRINT_ORDER:
+  for field in EVENT_SHOW_ORDER:
     if field in event:
       showJSON(field, event[field], skipObjects, EVENT_TIME_OBJECTS)
       skipObjects.add(field)
@@ -21651,7 +21692,8 @@ def getUserAttributes(cd, updateCmd, noUid=False):
     else:
       unknownArgumentExit()
   if need_password:
-    body['password'] = ''.join(random.sample(string.digits+string.ascii_letters, 25))
+    rnd = SystemRandom()
+    body['password'] = ''.join(rnd.choice(PASSWORD_SAFE_CHARS) for _ in range(25))
   if notify:
     notify['password'] = body.get('password')
   if 'password' in body and need_to_hash_password:
@@ -22402,7 +22444,7 @@ def infoUsers(entityList):
           customTypeKey = userProperty[UProp.TYPE_KEYWORDS][UProp.PTKW_ATTR_CUSTOMTYPE_KEYWORD]
           printKeyValueList([UProp.PROPERTIES[up][UProp.TITLE], None])
           Ind.Increment()
-          for schema in propertyValue:
+          for schema in sorted(propertyValue):
             printKeyValueList(['Schema', schema])
             Ind.Increment()
             for field in propertyValue[schema]:
@@ -25338,7 +25380,7 @@ def encode_multipart(fields, files, boundary=None):
     return '--{0}'.format(boundary), 'Content-Disposition: form-data; name="{0}"'.format(escape_quote(name)), '', str(value)
 
   if boundary is None:
-    boundary = ''.join(random.sample(string.digits+string.ascii_letters, 30))
+    boundary = ''.join(random.choice(ALPHANUMERIC_CHARS) for _ in range(30))
   lines = []
   for name, value in iteritems(fields):
     if name == 'tags':
@@ -25747,6 +25789,8 @@ def doPrinterWipeACLs(printerIdList):
     if currentScopeList is not None:
       _batchDeletePrinterACLs(cp, printerId, i, count, currentScopeList, role)
 
+PRINTACLS_SORT_TITLES = ['id', 'printerName', 'email', 'name', 'membership', 'is_pending', 'role', 'scope', 'type']
+
 # gam printer|printers <PrinterIDEntity> printacls [todrive <ToDriveAttributes>*]
 # gam printer|printers <PrinterIDEntity> showacls
 def doPrinterPrintShowACLs(printerIdList):
@@ -25796,7 +25840,7 @@ def doPrinterPrintShowACLs(printerIdList):
     except GCP.unknownPrinter as e:
       entityActionFailedWarning([Ent.PRINTER, printerId], str(e), i, count)
   if csvFormat:
-    writeCSVfile(csvRows, titles, 'PrinterACLs', todrive)
+    writeCSVfile(csvRows, titles, 'PrinterACLs', todrive, PRINTACLS_SORT_TITLES)
 
 # gam printjob|printjobs <PrintJobEntity> cancel
 def doPrintJobCancel(jobIdList):
@@ -27457,7 +27501,7 @@ QUERY_SHORTCUTS_MAP = {
   'allfolders': "mimeType = '{0}'".format(MIMETYPE_GA_FOLDER),
   'allgooglefiles': "mimeType != '{0}' and mimeType contains 'vnd.google'".format(MIMETYPE_GA_FOLDER),
   'allnongooglefiles': "not mimeType contains 'vnd.google'",
-  'allitems': '',
+  'allitems': 'allitems',
   'myfiles': ME_IN_OWNERS_AND+"mimeType != '{0}'".format(MIMETYPE_GA_FOLDER),
   'myfolders': ME_IN_OWNERS_AND+"mimeType = '{0}'".format(MIMETYPE_GA_FOLDER),
   'mygooglefiles': ME_IN_OWNERS_AND+"mimeType != '{0}' and mimeType contains 'vnd.google'".format(MIMETYPE_GA_FOLDER),
@@ -27475,10 +27519,12 @@ TEAMDRIVE_QUERY_SHORTCUTS_MAP = {
   'allfolders': "mimeType = '{0}'".format(MIMETYPE_GA_FOLDER),
   'allgooglefiles': "mimeType != '{0}' and mimeType contains 'vnd.google'".format(MIMETYPE_GA_FOLDER),
   'allnongooglefiles': "not mimeType contains 'vnd.google'",
-  'allitems': '',
+  'allitems': 'allitems',
   }
 
 def doDriveSearch(drive, user, i, count, query=None, parentQuery=False, emptyQueryOK=False, orderBy=None, teamDriveOnly=False, **kwargs):
+  if query == 'allitems':
+    query = None
   if GC.Values[GC.SHOW_GETTINGS]:
     printGettingAllEntityItemsForWhom(Ent.DRIVE_FILE_OR_FOLDER, user, i, count, query=query)
   try:
@@ -28417,7 +28463,8 @@ DRIVESETTINGS_FIELDS_CHOICE_MAP = {
   'name': 'name',
   'permissionid': 'permissionId',
   'rootfolderid': 'rootFolderId',
-  'teamdrivethemes': 'teamDriveThemes',
+  'drivethemes': 'driveThemes',
+  'teamdrivethemes': 'driveThemes',
   'usage': 'usage',
   'usageindrive': 'usageInDrive',
   'usageindrivetrash': 'usageInDriveTrash',
@@ -28542,9 +28589,9 @@ def printShowDriveSettings(users):
           for setting, value in iteritems(feed['maxImportSizes']):
             printKeyValueList([setting, formatFileSize(int(value))])
           Ind.Decrement()
-        if 'teamDriveThemes' in fieldsList and 'teamDriveThemes' in feed:
-          printKeyValueList(['teamDriveThemes', None])
-          _showTeamDriveThemeSettings(feed['teamDriveThemes'])
+        if 'driveThemes' in fieldsList and 'driveThemes' in feed:
+          printKeyValueList(['driveThemes', None])
+          _showTeamDriveThemeSettings(feed['driveThemes'])
         Ind.Decrement()
       else:
         row = {'email': user}
@@ -28560,14 +28607,14 @@ def printShowDriveSettings(users):
           for setting, value in iteritems(feed['maxImportSizes']):
             row['maxImportSizes.{0}.{1}'.format(j, setting)] = formatFileSize(int(value))
             j += 1
-        if 'teamDriveThemes' in fieldsList and 'teamDriveThemes' in feed:
-          jcount = len(feed['teamDriveThemes'])
-          row['teamDriveThemes'] = jcount
+        if 'driveThemes' in fieldsList and 'driveThemes' in feed:
+          jcount = len(feed['driveThemes'])
+          row['driveThemes'] = jcount
           j = 0
-          for setting in feed['teamDriveThemes']:
-            row['teamDriveThemes.{0:02d}.id'.format(j)] = setting['id']
-            row['teamDriveThemes.{0:02d}.backgroundImageLink'.format(j)] = setting['backgroundImageLink']
-            row['teamDriveThemes.{0:02d}.colorRgb'.format(j)] = setting['colorRgb']
+          for setting in feed['driveThemes']:
+            row['driveThemes.{0:02d}.id'.format(j)] = setting['id']
+            row['driveThemes.{0:02d}.backgroundImageLink'.format(j)] = setting['backgroundImageLink']
+            row['driveThemes.{0:02d}.colorRgb'.format(j)] = setting['colorRgb']
             j += 1
         addRowTitlesToCSVfile(row, csvRows, titles)
     except (GAPI.serviceNotAvailable, GAPI.authError, GAPI.domainPolicy) as e:
@@ -28585,9 +28632,9 @@ def _showTeamDriveThemes(users):
     if not drive:
       continue
     try:
-      themes = callGAPIitems(drive.about(), 'get', 'teamDriveThemes',
+      themes = callGAPIitems(drive.about(), 'get', 'driveThemes',
                              throw_reasons=GAPI.DRIVE_USER_THROW_REASONS,
-                             fields='teamDriveThemes')
+                             fields='driveThemes')
       jcount = len(themes)
       entityPerformActionNumItems([Ent.USER, user], jcount, Ent.TEAMDRIVE_THEME, i, count)
       _showTeamDriveThemeSettings(themes)
@@ -28909,7 +28956,8 @@ DRIVE_PERMISSIONS_SUBFIELDS_CHOICE_MAP = {
   'photolink': 'photoLink',
   'expirationdate': 'expirationTime',
   'expirationtime': 'expirationTime',
-  'teamdrivepermissiondetails': 'teamDrivePermissionDetails',
+  'permissiondetails': 'permissionDetails',
+  'teamdrivepermissiondetails': 'permissionDetails',
   'deleted': 'deleted',
   }
 
@@ -33470,7 +33518,7 @@ def emptyDriveTrash(users):
       Ind.Decrement()
 
 def _getDriveFileACLPrintKeysTimeObjects():
-  printKeys = ['id', 'type', 'emailAddress', 'domain', 'role', 'teamDrivePermissionDetails', VX_EXPIRATION_TIME, 'photoLink', 'allowFileDiscovery', 'deleted']
+  printKeys = ['id', 'type', 'emailAddress', 'domain', 'role', 'permissionDetails', VX_EXPIRATION_TIME, 'photoLink', 'allowFileDiscovery', 'deleted']
   timeObjects = [VX_EXPIRATION_TIME]
   if not GC.Values[GC.DRIVE_V3_NATIVE_NAMES]:
     _mapDrive3TitlesToDrive2(printKeys, API.DRIVE3_TO_DRIVE2_FILES_FIELDS_MAP)
@@ -33502,13 +33550,13 @@ def _showDriveFilePermission(permission, printKeys, timeObjects, i=0, count=0):
     value = permission.get(key)
     if value is None:
       continue
-    if key == 'teamDrivePermissionDetails':
+    if key == 'permissionDetails':
       printKeyValueList([key, ''])
       Ind.Increment()
       for detail in value:
         printKeyValueList(['role', detail['role']])
         Ind.Increment()
-        printKeyValueList(['type', detail['teamDrivePermissionType']])
+        printKeyValueList(['type', detail['permissionType']])
         if 'additionalRoles' in detail:
           printKeyValueList(['additionalRoles', ','.join(detail['additionalRoles'])])
         printKeyValueList(['inherited', detail['inherited']])
@@ -35034,7 +35082,7 @@ def getLicenseParameters(operation):
     parameters[LICENSE_PRODUCTID] = getGoogleProduct()
   if operation == 'patch':
     checkArgumentPresent('from')
-    oldProductId, parameters[LICENSE_OLDSKUID] = getGoogleSKU()
+    _, parameters[LICENSE_OLDSKUID] = getGoogleSKU()
   checkForExtraneousArguments()
   return (lic, parameters)
 
@@ -39493,6 +39541,8 @@ OAUTH2_SUBCOMMANDS = {
   'export': (Act.EXPORT, doOAuthExport),
   'import': (Act.IMPORT, doOAuthImport),
   'info': (Act.INFO, doOAuthInfo),
+  'refresh': (Act.REFRESH, doOAuthRefresh),
+  'update': (Act.UPDATE, doOAuthUpdate),
   }
 
 # Oauth sub-command aliases
