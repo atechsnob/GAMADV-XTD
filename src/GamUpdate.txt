@@ -1,3 +1,7 @@
+4.85.02
+
+Fixed bug in `gam report customer` where a trap was thrown if `date` was not specified.
+
 4.85.01
 
 Fixed bug where use of `csvkmd` inside of a `gam csv` command threw a spurious error: "ERROR: CSV data already saved".

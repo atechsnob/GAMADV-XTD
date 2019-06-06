@@ -22,7 +22,7 @@ For more information, see https://github.com/taers232c/GAMADV-XTD
 """
 
 __author__ = 'Ross Scroggs <ross.scroggs@gmail.com>'
-__version__ = '4.85.01'
+__version__ = '4.85.02'
 __license__ = 'Apache License 2.0 (http://www.apache.org/licenses/LICENSE-2.0)'
 
 import base64
@@ -7117,6 +7117,8 @@ NL_SPACES_PATTERN = re.compile(r'\n +')
 REPORTS_PARAMETERS_SIMPLE_TYPES = ['intValue', 'boolValue', 'datetimeValue', 'stringValue']
 
 REPORT_CHOICE_MAP = {
+  'access': 'access_transparency',
+  'accesstransparency': 'access_transparency',
   'admin': 'admin',
   'calendar': 'calendar',
   'calendars': 'calendar',
@@ -7126,12 +7128,18 @@ REPORT_CHOICE_MAP = {
   'docs': 'drive',
   'domain': 'customer',
   'drive': 'drive',
+  'enterprisegroups': 'groups_enterprise',
+  'gplus': 'gplus',
+  'google+': 'gplus',
   'group': 'groups',
   'groups': 'groups',
+  'groupsenterprise': 'groups_enterprise',
+  'hangoutsmeet': 'meet',
   'login': 'login',
   'logins': 'login',
   'meet': 'meet',
   'mobile': 'mobile',
+  'oauthtoken': 'token',
   'rules': 'rules',
   'saml': 'saml',
   'token': 'token',
@@ -7564,6 +7572,8 @@ def doReport():
       csvRows.sort(key=lambda k: k['date'])
       writeCSVfile(csvRows, titles, 'User Reports Aggregate - {0}'.format(tryDate), todrive, sortTitles)
   elif customerReports:
+    if startEndTime.startDateTime is None:
+      startEndTime.startDateTime = startEndTime.endDateTime = todaysDate()
     titles, csvRows = initializeTitlesCSVfile('date')
     if not userCustomerRange:
       addTitlesToCSVfile(['name', 'value'], titles)
