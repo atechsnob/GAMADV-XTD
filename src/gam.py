@@ -22,7 +22,7 @@ For more information, see https://github.com/taers232c/GAMADV-XTD
 """
 
 __author__ = 'Ross Scroggs <ross.scroggs@gmail.com>'
-__version__ = '4.85.02'
+__version__ = '4.86.00'
 __license__ = 'Apache License 2.0 (http://www.apache.org/licenses/LICENSE-2.0)'
 
 import base64
@@ -7668,17 +7668,37 @@ def doReport():
           events = activity.pop('events')
           if not countsOnly:
             activity_row = flattenJSON(activity, timeObjects=REPORT_ACTIVITIES_TIME_OBJECTS)
+            purge_parameters = True
             for event in events:
               for item in event.get('parameters', []):
-                if item['name'] in ['start_time', 'end_time']:
-                  val = item.get('intValue')
-                  if val is not None:
-                    val = int(val)
-                    if val >= 62135683200:
-                      item['dateTimeValue'] = ISOformatTimeStamp(datetime.datetime.fromtimestamp(val-62135683200, GC.Values[GC.TIMEZONE]))
-                      item.pop('intValue')
-                if 'value' in item:
-                  item['value'] = NL_SPACES_PATTERN.sub('', item['value'])
+                if set(item) == set(['value', 'name']):
+                  event[item['name']] = NL_SPACES_PATTERN.sub('', item['value'])
+                elif set(item) == set(['intValue', 'name']):
+                  if item['name'] in ['start_time', 'end_time']:
+                    val = item.get('intValue')
+                    if val is not None:
+                      val = int(val)
+                      if val >= 62135683200:
+                        item['dateTimeValue'] = ISOformatTimeStamp(datetime.datetime.fromtimestamp(val-62135683200, GC.Values[GC.TIMEZONE]))
+                        item.pop('intValue')
+                  else:
+                    event[item['name']] = item['intValue']
+                elif set(item) == set(['multiValue', 'name']):
+                  event[item['name']] = ' '.join(item['multiValue'])
+                elif item['name'] == 'scope_data':
+                  parts = {}
+                  for message in item['multiMessageValue']:
+                    for mess in message['parameter']:
+                      value = mess.get('value', ' '.join(mess.get('multiValue', [])))
+                      parts[mess['name']] = parts.get(mess['name'], [])+[value]
+                  for part, v in parts.items():
+                    if part == 'scope_name':
+                      part = 'scope'
+                    event[part] = ' '.join(v)
+                else:
+                  purge_parameters = False
+              if purge_parameters:
+                event.pop('parameters')
               row = flattenJSON(event)
               row.update(activity_row)
               addRowTitlesToCSVfile(row, csvRows, titles)
