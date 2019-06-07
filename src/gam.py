@@ -22,7 +22,7 @@ For more information, see https://github.com/taers232c/GAMADV-XTD
 """
 
 __author__ = 'Ross Scroggs <ross.scroggs@gmail.com>'
-__version__ = '4.86.00'
+__version__ = '4.86.01'
 __license__ = 'Apache License 2.0 (http://www.apache.org/licenses/LICENSE-2.0)'
 
 import base64
@@ -7701,7 +7701,7 @@ def doReport():
                 else:
                   purge_parameters = False
               if purge_parameters:
-                event.pop('parameters')
+                event.pop('parameters', None)
               row = flattenJSON(event)
               row.update(activity_row)
               addRowTitlesToCSVfile(row, csvRows, titles)
