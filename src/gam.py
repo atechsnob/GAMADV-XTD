@@ -22,7 +22,7 @@ For more information, see https://github.com/taers232c/GAMADV-XTD
 """
 
 __author__ = 'Ross Scroggs <ross.scroggs@gmail.com>'
-__version__ = '4.86.01'
+__version__ = '4.86.03'
 __license__ = 'Apache License 2.0 (http://www.apache.org/licenses/LICENSE-2.0)'
 
 import base64
@@ -70,6 +70,7 @@ import time
 from traceback import print_exc
 from urllib import urlencode
 from urllib2 import unquote
+from urlparse import urlparse
 import uuid
 import webbrowser
 import zipfile
@@ -3034,8 +3035,7 @@ def doGAMCheckForUpdates(forceCheck):
       printLine(Msg.GAM_EXITING_FOR_UPDATE)
       sys.exit(0)
     writeFile(GM.Globals[GM.LAST_UPDATE_CHECK_TXT], str(now_time), continueOnError=True, displayError=forceCheck)
-  except (httplib2.HttpLib2Error, httplib2.ServerNotFoundError,
-          google.auth.exceptions.TransportError, httplib2.CertificateValidationUnsupported) as e:
+  except (httplib2.HttpLib2Error, google.auth.exceptions.TransportError) as e:
     if forceCheck:
       systemErrorExit(NETWORK_ERROR_RC, str(e))
 
@@ -3095,7 +3095,7 @@ def getClientCredentials(forceRefresh=False):
   if credentials.access_token_expired or forceRefresh:
     try:
       credentials.refresh(getHttpObj())
-    except (httplib2.ServerNotFoundError, google.auth.exceptions.TransportError) as e:
+    except (httplib2.HttpLib2Error, google.auth.exceptions.TransportError) as e:
       systemErrorExit(NETWORK_ERROR_RC, str(e))
     except (oauth2client.client.AccessTokenRefreshError, google.auth.exceptions.RefreshError) as e:
       if isinstance(e.args, tuple):
@@ -3130,7 +3130,7 @@ def getGDataOAuthToken(gdataObj, credentials=None):
     credentials = getClientCredentials()
   try:
     credentials.refresh(getHttpObj())
-  except (httplib2.ServerNotFoundError, google.auth.exceptions.TransportError) as e:
+  except (httplib2.HttpLib2Error, google.auth.exceptions.TransportError) as e:
     systemErrorExit(NETWORK_ERROR_RC, str(e))
   except oauth2client.client.AccessTokenRefreshError as e:
     if isinstance(e.args, tuple):
@@ -3291,6 +3291,8 @@ def callGData(service, function,
         e = e.args[0]
       handleOAuthTokenError(e, GDATA.SERVICE_NOT_APPLICABLE in throw_errors)
       raise GDATA.ERROR_CODE_EXCEPTION_MAP[GDATA.SERVICE_NOT_APPLICABLE](str(e))
+    except httplib2.CertificateValidationUnsupported:
+      noPythonSSLExit()
     except (http_client.ResponseNotReady, httplib2.SSLHandshakeError, socket.error) as e:
       errMsg = u'Connection error: {0}'.format(convertSysToUTF8(str(e) or repr(e)))
       if n != retries:
@@ -3300,7 +3302,7 @@ def callGData(service, function,
         writeStderr(convertUTF8toSys('\n{0}{1} - Giving up.\n'.format(ERROR_PREFIX, errMsg)))
         return None
       systemErrorExit(SOCKET_ERROR_RC, errMsg)
-    except (httplib2.ServerNotFoundError, google.auth.exceptions.TransportError) as e:
+    except (httplib2.HttpLib2Error, google.auth.exceptions.TransportError) as e:
       systemErrorExit(NETWORK_ERROR_RC, str(e))
     except IOError as e:
       systemErrorExit(FILE_ERROR_RC, str(e))
@@ -3503,7 +3505,7 @@ def callGAPI(service, function,
       systemErrorExit(GOOGLE_API_ERROR_RC, str(e))
     except TypeError as e:
       systemErrorExit(GOOGLE_API_ERROR_RC, str(e))
-    except (httplib2.ServerNotFoundError, google.auth.exceptions.TransportError) as e:
+    except (httplib2.HttpLib2Error, google.auth.exceptions.TransportError) as e:
       systemErrorExit(NETWORK_ERROR_RC, str(e))
     except IOError as e:
       systemErrorExit(FILE_ERROR_RC, str(e))
@@ -3656,13 +3658,15 @@ def getAPIversionHttpService(api):
           waitOnFailure(n, retries, INVALID_JSON_RC, Msg.INVALID_JSON_INFORMATION)
           continue
         systemErrorExit(INVALID_JSON_RC, Msg.INVALID_JSON_INFORMATION)
+      except httplib2.CertificateValidationUnsupported:
+        noPythonSSLExit()
       except (http_client.ResponseNotReady, httplib2.SSLHandshakeError, socket.error) as e:
         errMsg = u'Connection error: {0}'.format(convertSysToUTF8(str(e) or repr(e)))
         if n != retries:
           waitOnFailure(n, retries, SOCKET_ERROR_RC, errMsg)
           continue
         systemErrorExit(SOCKET_ERROR_RC, errMsg)
-      except (httplib2.ServerNotFoundError, google.auth.exceptions.TransportError) as e:
+      except (httplib2.HttpLib2Error, google.auth.exceptions.TransportError) as e:
         systemErrorExit(NETWORK_ERROR_RC, str(e))
       except IOError as e:
         systemErrorExit(FILE_ERROR_RC, str(e))
@@ -3692,7 +3696,7 @@ def buildGAPIObject(api):
     systemErrorExit(NO_SCOPES_FOR_API_RC, Msg.NO_SCOPES_FOR_API.format(service._rootDesc['title']))
   try:
     service._http = credentials.authorize(httpObj)
-  except (httplib2.ServerNotFoundError, google.auth.exceptions.TransportError) as e:
+  except (httplib2.HttpLib2Error, google.auth.exceptions.TransportError) as e:
     systemErrorExit(NETWORK_ERROR_RC, str(e))
   except (oauth2client.client.AccessTokenRefreshError, google.auth.exceptions.RefreshError) as e:
     if isinstance(e.args, tuple):
@@ -3740,7 +3744,7 @@ def buildGAPIServiceObject(api, user, i=0, count=0, displayError=True):
   try:
     credentials.refresh(request)
     service._http = google_auth_httplib2.AuthorizedHttp(credentials, http=httpObj)
-  except (httplib2.ServerNotFoundError, google.auth.exceptions.TransportError) as e:
+  except (httplib2.HttpLib2Error, google.auth.exceptions.TransportError) as e:
     systemErrorExit(NETWORK_ERROR_RC, str(e))
   except google.auth.exceptions.RefreshError as e:
     if isinstance(e.args, tuple):
@@ -3786,7 +3790,7 @@ def getGDataUserCredentials(api, user, i, count):
   try:
     credentials.refresh(request)
     return (userEmail, credentials)
-  except (httplib2.ServerNotFoundError, google.auth.exceptions.TransportError) as e:
+  except (httplib2.HttpLib2Error, google.auth.exceptions.TransportError) as e:
     systemErrorExit(NETWORK_ERROR_RC, str(e))
   except google.auth.exceptions.RefreshError as e:
     if isinstance(e.args, tuple):
@@ -5578,10 +5582,23 @@ def batchRequestID(entityName, i, count, j, jcount, item, role=None, option=None
     return '{0}\n{1}\n{2}\n{3}\n{4}\n{5}'.format(entityName, i, count, j, jcount, item)
   return '{0}\n{1}\n{2}\n{3}\n{4}\n{5}\n{6}\n{7}'.format(entityName, i, count, j, jcount, item, role, option)
 
-# gam version [check|checkrc|simple|extended]
+def _getServerTLSUsed(location):
+  url = 'https://'+location
+  _, netloc, _, _, _, _ = urlparse(url)
+  conn = 'https:'+netloc
+  httpObj = getHttpObj()
+  try:
+    httpObj.request(url, headers={'user-agent': GAM_INFO})
+  except httplib2.HttpLib2Error as e:
+    systemErrorExit(NETWORK_ERROR_RC, str(e))
+  cipher_name, tls_ver, _ = httpObj.connections[conn].sock.cipher()
+  return tls_ver, cipher_name
+
+# gam version [check|checkrc|simple|extended] [location <HostName>]
 def doVersion(checkForArgs=True):
   forceCheck = 0
   extended = simple = False
+  testLocation = 'www.googleapis.com'
   if checkForArgs:
     while Cmd.ArgumentsRemaining():
       myarg = getArgument()
@@ -5593,6 +5610,8 @@ def doVersion(checkForArgs=True):
         simple = True
       elif myarg == 'extended':
         extended = True
+      elif myarg == 'location':
+        testLocation = getString(Cmd.OB_HOST_NAME)
       else:
         unknownArgumentExit()
   if simple:
@@ -5607,11 +5626,8 @@ def doVersion(checkForArgs=True):
     doGAMCheckForUpdates(forceCheck)
   if extended:
     printKeyValueList([ssl.OPENSSL_VERSION])
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    ssl_sock = ssl.wrap_socket(s, cert_reqs=ssl.CERT_NONE, ca_certs=GC.Values[GC.CACERTS_PEM])
-    ssl_sock.connect(('www.googleapis.com', 443))
-    cipher_name, tls_ver, _ = ssl_sock.cipher()
-    printKeyValueList(['www.googleapis.com connects using {0} {1}'.format(tls_ver, cipher_name)])
+    tls_ver, cipher_name = _getServerTLSUsed(testLocation)
+    printKeyValueList(['{0} connects using {1} {2}'.format(testLocation, tls_ver, cipher_name)])
 
 # gam help
 def doUsage():
@@ -6367,13 +6383,16 @@ def _run_oauth_flow(client_id, client_secret, scopes, login_hint, access_type, s
   oauth2client.tools._BROWSER_OPENED_MESSAGE = Msg.OAUTH2_BROWSER_OPENED_MESSAGE
   oauth2client.tools._GO_TO_LINK_MESSAGE = Msg.OAUTH2_GO_TO_LINK_MESSAGE
   flow = oauth2client.client.OAuth2WebServerFlow(client_id=client_id, client_secret=client_secret, scope=scopes,
-                                                 redirect_uri=oauth2client.client.OOB_CALLBACK_URN, login_hint=login_hint,
+                                                 redirect_uri=oauth2client.client.OOB_CALLBACK_URN,
+                                                 login_hint=login_hint, pkce=True,
                                                  user_agent=GAM_INFO, access_type=access_type, response_type='code')
   try:
     return oauth2client.tools.run_flow(flow=flow, storage=storage,
                                        flags=cmd_flags(noLocalWebserver=GC.Values[GC.NO_BROWSER]), http=getHttpObj())
   except httplib2.CertificateValidationUnsupported:
     noPythonSSLExit()
+  except httplib2.HttpLib2Error as e:
+    systemErrorExit(NETWORK_ERROR_RC, str(e))
 
 # gam oauth|oauth2 create|request [<EmailAddress>]
 def doOAuthRequest(currentScopes=None):
@@ -6599,7 +6618,7 @@ def checkServiceAccount(users):
       try:
         credentials.refresh(request)
         result = 'PASS'
-      except (httplib2.ServerNotFoundError, google.auth.exceptions.TransportError) as e:
+      except (httplib2.HttpLib2Error, google.auth.exceptions.TransportError) as e:
         systemErrorExit(NETWORK_ERROR_RC, str(e))
       except google.auth.exceptions.RefreshError:
         result = 'FAIL'
@@ -6686,12 +6705,11 @@ def enableGAMProjectAPIs(httpObj, projectId, checkEnabled, i=0, count=0):
 def _createClientSecretsOauth2service(httpObj, projectId):
 
   def _checkClientAndSecret(csHttpObj, client_id, client_secret):
-    url = 'https://oauth2.googleapis.com/token'
     post_data = {'client_id': client_id, 'client_secret': client_secret,
                  'code': 'ThisIsAnInvalidCodeOnlyBeingUsedToTestIfClientAndSecretAreValid',
                  'redirect_uri': 'urn:ietf:wg:oauth:2.0:oob', 'grant_type': 'authorization_code'}
-    headers = {'Content-type': 'application/x-www-form-urlencoded'}
-    _, content = csHttpObj.request(url, 'POST', urlencode(post_data), headers=headers)
+    _, content = csHttpObj.request('https://oauth2.googleapis.com/token', 'POST', urlencode(post_data),
+                                   headers={'Content-type': 'application/x-www-form-urlencoded'})
     try:
       content = json.loads(content)
     except ValueError:
@@ -35226,8 +35244,7 @@ def updatePhoto(users):
         if status['content-location'] != filename:
           entityActionFailedWarning([Ent.USER, user, Ent.PHOTO, filename], Msg.NOT_FOUND, i, count)
           continue
-      except (httplib2.HttpLib2Error, httplib2.ServerNotFoundError,
-              google.auth.exceptions.TransportError, httplib2.CertificateValidationUnsupported) as e:
+      except (httplib2.HttpLib2Error, google.auth.exceptions.TransportError) as e:
         entityActionFailedWarning([Ent.USER, user, Ent.PHOTO, filename], str(e), i, count)
         continue
     else:

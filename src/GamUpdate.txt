@@ -1,3 +1,12 @@
+4.86.03
+
+Code cleanup for `oauth2client` library calls; following Jay's suggestion, enabled OAuth 2.0 PKCE (https://www.oauth.com/oauth2-servers/pkce)
+to protect tokens during authentication.
+
+4.86.02
+
+Skipped.
+
 4.86.01
 
 Fixed bug in `gam report <ActivityApplicationName>` that caused a trap.
