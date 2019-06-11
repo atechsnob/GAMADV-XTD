@@ -22,7 +22,7 @@ For more information, see https://github.com/taers232c/GAMADV-XTD
 """
 
 __author__ = 'Ross Scroggs <ross.scroggs@gmail.com>'
-__version__ = '4.86.03'
+__version__ = '4.86.04'
 __license__ = 'Apache License 2.0 (http://www.apache.org/licenses/LICENSE-2.0)'
 
 import base64
@@ -5257,13 +5257,13 @@ def writeCSVfile(csvRows, titles, list_type, todrive, sortTitles=None, quotechar
 
   def rowRegexFilterMatch(row, columns, filterPattern):
     for column in columns:
-      if filterPattern.search(row.get(column, '')):
+      if filterPattern.search(str(row.get(column, ''))):
         return True
     return False
 
   def rowDateTimeFilterMatch(dateMode, row, columns, op, filterDate):
     def checkMatch(rowDate):
-      if not rowDate:
+      if not rowDate or not isinstance(rowDate, string_types):
         return False
       if rowDate == GC.Values[GC.NEVER_TIME]:
         rowDate = NEVER_TIME
@@ -18884,9 +18884,9 @@ def _getCalendarPrintShowEventOptions(calendarEventEntity, csvFormat, entityType
   _addEventEntitySelectFields(calendarEventEntity, fieldsList)
   return (todrive, FJQC, fieldsList, sortTitles)
 
-# gam calendars <CalendarEntity> print events <EventSelectProperties>* <EventDisplayProperties>* [fields <EventFieldNameList>]
+# gam calendars <CalendarEntity> print events <EventEntity> <EventDisplayProperties>* [fields <EventFieldNameList>]
 #	[formatjson] [quotechar <Character>] [todrive <ToDriveAttributes>*]
-# gam calendars <CalendarEntity> show events <EventSelectProperties>* <EventDisplayProperties>* [fields <EventFieldNameList>] [formatjson]
+# gam calendars <CalendarEntity> show events <EventEntity> <EventDisplayProperties>* [fields <EventFieldNameList>] [formatjson]
 def doCalendarsPrintShowEvents(cal, calIds):
   calendarEventEntity = getCalendarEventEntity(noIds=True)
   csvFormat = Act.csvFormat()
@@ -27519,9 +27519,9 @@ def infoCalendarEvents(users):
     _infoCalendarEvents(origUser, user, cal, calIds, jcount, calendarEventEntity, FJQC, fieldsList)
     Ind.Decrement()
 
-# gam <UserTypeEntity> print events <UserCalendarEntity> <EventSelectProperties>* <EventDisplayProperties>* [fields <EventFieldNameList>]
+# gam <UserTypeEntity> print events <UserCalendarEntity> <EventEntity> <EventDisplayProperties>* [fields <EventFieldNameList>]
 #	[formatjson] [quotechar <Character>] [todrive <ToDriveAttributes>*]
-# gam <UserTypeEntity> show events <UserCalendarEntity> <EventSelectProperties>* <EventDisplayProperties>* [fields <EventFieldNameList>] [formatjson]
+# gam <UserTypeEntity> show events <UserCalendarEntity> <EventEntity> <EventDisplayProperties>* [fields <EventFieldNameList>] [formatjson]
 def printShowCalendarEvents(users):
   todrive = {}
   calendarEntity = getUserCalendarEntity()
