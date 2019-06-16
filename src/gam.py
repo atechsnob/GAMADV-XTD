@@ -22,7 +22,7 @@ For more information, see https://github.com/taers232c/GAMADV-XTD
 """
 
 __author__ = 'Ross Scroggs <ross.scroggs@gmail.com>'
-__version__ = '4.86.07'
+__version__ = '4.86.08'
 __license__ = 'Apache License 2.0 (http://www.apache.org/licenses/LICENSE-2.0)'
 
 import base64
@@ -2518,7 +2518,7 @@ def SetGlobalVariables():
 
   ROW_FILTER_COMP_PATTERN = re.compile(r'^(date|time|count)\s*([<>]=?|=|!=)\s*(.+)$', re.IGNORECASE)
   ROW_FILTER_BOOL_PATTERN = re.compile(r'^(boolean):(.+)$', re.IGNORECASE)
-  ROW_FILTER_RE_PATTERN = re.compile(r'^(regex):(.*)$', re.IGNORECASE)
+  ROW_FILTER_RE_PATTERN = re.compile(r'^(regex|notregex):(.*)$', re.IGNORECASE)
 
   def _getCfgRowFilter(sectionName, itemName):
     value = GM.Globals[GM.PARSER].get(sectionName, itemName)
@@ -5261,6 +5261,12 @@ def writeCSVfile(csvRows, titles, list_type, todrive, sortTitles=None, quotechar
         return True
     return False
 
+  def rowNotRegexFilterMatch(filterPattern):
+    for column in columns:
+      if filterPattern.search(str(row.get(column, ''))):
+        return False
+    return True
+
   def rowDateTimeFilterMatch(dateMode, row, columns, op, filterDate):
     def checkMatch(rowDate):
       if not rowDate or not isinstance(rowDate, string_types):
@@ -5334,6 +5340,8 @@ def writeCSVfile(csvRows, titles, list_type, todrive, sortTitles=None, quotechar
         continue
       if filterVal[1] == 'regex':
         csvRows = [row for row in csvRows if rowRegexFilterMatch(row, columns, filterVal[2])]
+      elif filterVal[1] == 'notregex':
+        csvRows = [row for row in csvRows if rowNotRegexFilterMatch(row, columns, filterVal[2])]
       elif filterVal[1] in ['date', 'time']:
         csvRows = [row for row in csvRows if rowDateTimeFilterMatch(filterVal[1] == 'date', row, columns, filterVal[2], filterVal[3])]
       elif filterVal[1] == 'count':
@@ -10234,11 +10242,12 @@ def _doCreateUpdateAliases(doUpdate):
         try:
           callGAPI(cd.users().aliases(), 'insert',
                    throw_reasons=[GAPI.USER_NOT_FOUND, GAPI.BAD_REQUEST,
-                                  GAPI.INVALID, GAPI.INVALID_INPUT, GAPI.FORBIDDEN, GAPI.DUPLICATE, GAPI.CONDITION_NOT_MET],
+                                  GAPI.INVALID, GAPI.INVALID_INPUT, GAPI.FORBIDDEN, GAPI.DUPLICATE,
+                                  GAPI.CONDITION_NOT_MET, GAPI.LIMIT_EXCEEDED],
                    userKey=targetEmail, body=body, fields='')
           entityActionPerformed([Ent.USER_ALIAS, aliasEmail, Ent.USER, targetEmail], i, count)
           continue
-        except GAPI.conditionNotMet as e:
+        except (GAPI.conditionNotMet, GAPI.limitExceeded) as e:
           entityActionFailedWarning([Ent.USER_ALIAS, aliasEmail, Ent.USER, targetEmail], str(e), i, count)
           continue
         except GAPI.duplicate:
@@ -10254,10 +10263,11 @@ def _doCreateUpdateAliases(doUpdate):
       try:
         callGAPI(cd.groups().aliases(), 'insert',
                  throw_reasons=[GAPI.GROUP_NOT_FOUND, GAPI.USER_NOT_FOUND, GAPI.BAD_REQUEST,
-                                GAPI.INVALID, GAPI.INVALID_INPUT, GAPI.FORBIDDEN, GAPI.DUPLICATE, GAPI.CONDITION_NOT_MET],
+                                GAPI.INVALID, GAPI.INVALID_INPUT, GAPI.FORBIDDEN, GAPI.DUPLICATE,
+                                GAPI.CONDITION_NOT_MET, GAPI.LIMIT_EXCEEDED],
                  groupKey=targetEmail, body=body, fields='')
         entityActionPerformed([Ent.GROUP_ALIAS, aliasEmail, Ent.GROUP, targetEmail], i, count)
-      except GAPI.conditionNotMet as e:
+      except (GAPI.conditionNotMet, GAPI.limitExceeded) as e:
         entityActionFailedWarning([Ent.GROUP_ALIAS, aliasEmail, Ent.GROUP, targetEmail], str(e), i, count)
       except GAPI.duplicate:
         entityActionFailedWarning([Ent.GROUP_ALIAS, aliasEmail, Ent.GROUP, targetEmail], Msg.DUPLICATE, i, count)
