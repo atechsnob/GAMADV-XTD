@@ -7732,7 +7732,7 @@ def doReport():
               row.update(activity_row)
               addRowTitlesToCSVfile(row, csvRows, titles)
           elif not summary:
-            actor = activity['actor']['email']
+            actor = activity['actor'].get('email', activity['actor'].get('key', 'Unknown'))
             eventCounts.setdefault(actor, {})
             for event in events:
               eventCounts[actor].setdefault(event['name'], 0)
@@ -14113,8 +14113,12 @@ def doInfoMobileDevices():
       else:
         printEntity([Ent.MOBILE_DEVICE, resourceId], i, count)
         Ind.Increment()
-        if 'deviceId' in mobile:
-          mobile['deviceId'] = mobile['deviceId'].encode('unicode-escape').decode(UTF8)
+        attrib = 'deviceId'
+        if attrib in mobile:
+          mobile[attrib] = mobile[attrib].encode('unicode-escape').decode(UTF8)
+        attrib = 'securityPatchLevel'
+        if attrib in mobile and int(mobile[attrib]):
+          mobile[attrib] = formatLocalTimestamp(mobile[attrib])
         showJSON(None, mobile, timeObjects=MOBILE_TIME_OBJECTS)
         Ind.Decrement()
     except GAPI.internalError:
@@ -14175,10 +14179,12 @@ def doPrintMobileDevices():
           row[attrib] = delimiter.join(applications)
       elif attrib == 'deviceId':
         row[attrib] = mobile[attrib].encode('unicode-escape').decode(UTF8)
-      elif attrib not in MOBILE_TIME_OBJECTS:
-        row[attrib] = mobile[attrib]
-      else:
+      elif attrib in MOBILE_TIME_OBJECTS:
         row[attrib] = formatLocalTime(mobile[attrib])
+      elif attrib == 'securityPatchLevel' and int(mobile[attrib]):
+        row[attrib] = formatLocalTimestamp(mobile[attrib])
+      else:
+        row[attrib] = mobile[attrib]
     addRowTitlesToCSVfile(row, csvRows, titles)
 
   cd = buildGAPIObject(API.DIRECTORY)
