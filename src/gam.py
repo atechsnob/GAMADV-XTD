@@ -3110,6 +3110,7 @@ def getClientCredentials(forceRefresh=False):
     for n in range(1, retries+1):
       try:
         credentials.refresh(getHttpObj())
+        break
       except (httplib2.HttpLib2Error, google.auth.exceptions.TransportError) as e:
         if n != retries:
           waitOnFailure(n, retries, NETWORK_ERROR_RC, str(e))
@@ -5629,12 +5630,18 @@ def _getServerTLSUsed(location):
   _, netloc, _, _, _, _ = urlparse(url)
   conn = 'https:'+netloc
   httpObj = getHttpObj()
-  try:
-    httpObj.request(url, headers={'user-agent': GAM_INFO})
-  except httplib2.HttpLib2Error as e:
-    handleServerError(e)
-  cipher_name, tls_ver, _ = httpObj.connections[conn].sock.cipher()
-  return tls_ver, cipher_name
+  retries = 5
+  for n in range(1, retries+1):
+    try:
+      httpObj.request(url, headers={'user-agent': GAM_INFO})
+      cipher_name, tls_ver, _ = httpObj.connections[conn].sock.cipher()
+      return tls_ver, cipher_name
+    except httplib2.HttpLib2Error as e:
+      if n != retries:
+        httpObj.connections = {}
+        waitOnFailure(n, retries, NETWORK_ERROR_RC, str(e))
+        continue
+      handleServerError(e)
 
 # gam version [check|checkrc|simple|extended] [location <HostName>]
 def doVersion(checkForArgs=True):
