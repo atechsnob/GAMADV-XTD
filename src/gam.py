@@ -3719,6 +3719,13 @@ def buildGAPIObject(api):
   for n in range(1, retries+1):
     try:
       service._http = credentials.authorize(httpObj)
+      if not GC.Values[GC.DOMAIN]:
+        GC.Values[GC.DOMAIN] = credentials.id_token.get('hd', 'UNKNOWN').lower()
+      if not GC.Values[GC.CUSTOMER_ID]:
+        GC.Values[GC.CUSTOMER_ID] = GC.MY_CUSTOMER
+      GM.Globals[GM.ADMIN] = credentials.id_token.get('email', 'UNKNOWN').lower()
+      GM.Globals[GM.OAUTH2_CLIENT_ID] = credentials.client_id
+      return service
     except (oauth2client.client.AccessTokenRefreshError, google.auth.exceptions.RefreshError) as e:
       if isinstance(e.args, tuple):
         e = e.args[0]
@@ -3729,13 +3736,6 @@ def buildGAPIObject(api):
         waitOnFailure(n, retries, NETWORK_ERROR_RC, str(e))
         continue
       handleServerError(e)
-    if not GC.Values[GC.DOMAIN]:
-      GC.Values[GC.DOMAIN] = credentials.id_token.get('hd', 'UNKNOWN').lower()
-    if not GC.Values[GC.CUSTOMER_ID]:
-      GC.Values[GC.CUSTOMER_ID] = GC.MY_CUSTOMER
-    GM.Globals[GM.ADMIN] = credentials.id_token.get('email', 'UNKNOWN').lower()
-    GM.Globals[GM.OAUTH2_CLIENT_ID] = credentials.client_id
-    return service
 
 # Override and wrap google_auth_httplib2 request methods so that the GAM
 # user-agent string is inserted into HTTP request headers.
@@ -3773,6 +3773,7 @@ def buildGAPIServiceObject(api, user, i=0, count=0, displayError=True):
     try:
       credentials.refresh(request)
       service._http = google_auth_httplib2.AuthorizedHttp(credentials, http=httpObj)
+      return (userEmail, service)
     except (httplib2.HttpLib2Error, google.auth.exceptions.TransportError) as e:
       if n != retries:
         httpObj.connections = {}
@@ -3786,7 +3787,6 @@ def buildGAPIServiceObject(api, user, i=0, count=0, displayError=True):
       if displayError:
         entityServiceNotApplicableWarning(Ent.USER, userEmail, i, count)
       return (userEmail, None)
-    return (userEmail, service)
 
 def initGDataObject(gdataObj, api):
   _, _, api_version, _ = API.getVersion(api)
