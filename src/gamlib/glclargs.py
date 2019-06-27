@@ -365,6 +365,7 @@ class GamCLArgs(object):
   ARG_FORWARDINGADDRESS = 'forwardingaddress'
   ARG_FORWARDINGADDRESSES = 'forwardingaddresses'
   ARG_GAL = 'gal'
+  ARG_GMAIL = 'gmail'
   ARG_GMAILPROFILE = 'gmailprofile'
   ARG_GROUP = 'group'
   ARG_GROUPS = 'groups'
@@ -569,6 +570,7 @@ class GamCLArgs(object):
   OB_JSON_DATA = 'JSONData'
   OB_LABEL_COLOR_HEX = 'LabelColorHex'
   OB_LABEL_NAME = 'LabelName'
+  OB_LABEL_NAME_LIST = 'LabelNameList'
   OB_LABEL_REPLACEMENT = 'LabelReplacement'
   OB_LANGUAGE_LIST = 'LanguageList'
   OB_MATTER_ITEM = 'MatterItem'
@@ -731,16 +733,7 @@ class GamCLArgs(object):
 
 # Concatenate list members, any item containing spaces is enclosed in ""
   def QuotedArgumentList(self, items):
-    qstr = ''
-    for item in items:
-      if isinstance(item, str):
-        item = unicode(item, self.encoding, 'replace')
-      if item and (item.find(' ') == -1) and (item.find(',') == -1):
-        qstr += item
-      else:
-        qstr += '"'+item+'"'
-      qstr += ' '
-    return qstr[:-1] if len(qstr) > 0 else ''
+    return ' '.join([item if item and (item.find(' ') == -1) and (item.find(',') == -1) else '"'+item+'"' for item in items])
 
 # Mark bad argument in command line
   def CommandLineWithBadArgumentMarked(self, extraneous):
