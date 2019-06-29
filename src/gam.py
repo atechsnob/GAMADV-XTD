@@ -24344,7 +24344,6 @@ def doPrintCourseTopics():
   def _printCourseTopic(course, courseTopic):
     if applyCourseItemFilter and not _courseItemPassesFilter(courseTopic, courseItemFilter):
       return
-    row = flattenJSON(courseTopic, flattened={'courseId': course['id'], 'courseName': course['name']}, timeObjects=COURSE_TOPICS_TIME_OBJECTS)
     if FJQC.formatJSON:
       csvRows.append({'courseId': course['id'], 'courseName': course['name'],
                       'JSON': json.dumps(cleanJSON(courseTopic, timeObjects=COURSE_TOPICS_TIME_OBJECTS), ensure_ascii=False, sort_keys=True)})
