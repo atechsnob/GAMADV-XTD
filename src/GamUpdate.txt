@@ -1,3 +1,11 @@
+4.88.05
+
+Fixed bug in `gam create/update user` that caused a trap when the `notify` option was used.
+
+4.88.04
+
+Skipped.
+
 4.88.03
 
 Added option to the `copyfrom` option used with `gam create/update course` that modifies how
