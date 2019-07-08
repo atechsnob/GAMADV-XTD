@@ -1,3 +1,13 @@
+4.88.10
+
+Added `countsonly` option to `gam calendar <CalendarEntity> print/show events` and
+`gam <UserTypeEntity> print/show events <UserCalendarEntity>`.
+This will cause Gam to print the number of events selected but no event details.
+
+4.88.09
+
+Skipped.
+
 4.88.08
 
 Updated `gam sendemail` to allow from addresses with display names.

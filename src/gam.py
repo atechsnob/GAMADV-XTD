@@ -22,7 +22,7 @@ For more information, see https://github.com/taers232c/GAMADV-XTD
 """
 
 __author__ = 'Ross Scroggs <ross.scroggs@gmail.com>'
-__version__ = '4.88.08'
+__version__ = '4.88.10'
 __license__ = 'Apache License 2.0 (http://www.apache.org/licenses/LICENSE-2.0)'
 
 import base64
@@ -18219,7 +18219,8 @@ def _getCalendarListEventsDisplayProperty(myarg, calendarEventEntity):
   return _getCalendarListEventsProperty(myarg, LIST_EVENTS_DISPLAY_PROPERTIES, calendarEventEntity['kwargs'])
 
 def initCalendarEventEntity():
-  return {'list': [], 'queries': [], 'kwargs': {}, 'dict': None, 'matches': [], 'maxinstances': -1}
+  return {'list': [], 'queries': [], 'kwargs': {}, 'dict': None,
+          'matches': [], 'maxinstances': -1, 'countsOnly': False}
 
 def getCalendarEventEntity(noIds=False):
   calendarEventEntity = initCalendarEventEntity()
@@ -18817,35 +18818,46 @@ def _printShowCalendarEvents(origUser, user, cal, calIds, count, calendarEventEn
   i = 0
   for calId in calIds:
     i += 1
-    calId, cal, events, jcount = _validateCalendarGetEvents(origUser, user, cal, calId, i, count, calendarEventEntity,
-                                                            fieldsList, not csvFormat and not FJQC.formatJSON)
-    if not csvFormat:
-      Ind.Increment()
-      j = 0
-      for event in events:
-        j += 1
-        _showCalendarEvent(user, calId, Ent.EVENT, event, j, jcount, FJQC)
-      Ind.Decrement()
-    else:
+    if csvFormat:
       printGettingEntityItemForWhom(Ent.EVENT, calId, i, count)
-      if not FJQC.formatJSON:
-        if events:
-          for event in events:
-            flattened = {'calendarId': calId}
-            if user:
-              flattened['primaryEmail'] = user
-            addRowTitlesToCSVfile(flattenJSON(event, flattened=flattened, timeObjects=EVENT_TIME_OBJECTS), csvRows, titles)
-        elif GC.Values[GC.CSV_OUTPUT_USERS_AUDIT] and user:
-          csvRows.append({'calendarId': calId, 'primaryEmail': user})
+    calId, cal, events, jcount = _validateCalendarGetEvents(origUser, user, cal, calId, i, count, calendarEventEntity,
+                                                            fieldsList, not csvFormat and not FJQC.formatJSON and not calendarEventEntity['countsOnly'])
+    if not csvFormat:
+      if not calendarEventEntity['countsOnly']:
+        Ind.Increment()
+        j = 0
+        for event in events:
+          j += 1
+          _showCalendarEvent(user, calId, Ent.EVENT, event, j, jcount, FJQC)
+        Ind.Decrement()
       else:
-        if events:
-          for event in events:
-            flattened = {'calendarId': calId, 'JSON': json.dumps(cleanJSON(event, timeObjects=EVENT_TIME_OBJECTS), ensure_ascii=False, sort_keys=False)}
-            if user:
-              flattened['primaryEmail'] = user
-            csvRows.append(flattened)
-        elif GC.Values[GC.CSV_OUTPUT_USERS_AUDIT] and user:
-          csvRows.append({'primaryEmail': user, 'calendarId': calId, 'JSON': json.dumps({})})
+        printKeyValueList([Ent.Singular(Ent.CALENDAR), calId, Ent.Choose(Ent.EVENT, jcount), jcount])
+    else:
+      if not calendarEventEntity['countsOnly']:
+        if not FJQC.formatJSON:
+          if events:
+            for event in events:
+              flattened = {'calendarId': calId}
+              if user:
+                flattened['primaryEmail'] = user
+              addRowTitlesToCSVfile(flattenJSON(event, flattened=flattened, timeObjects=EVENT_TIME_OBJECTS), csvRows, titles)
+          elif GC.Values[GC.CSV_OUTPUT_USERS_AUDIT] and user:
+            csvRows.append({'calendarId': calId, 'primaryEmail': user})
+        else:
+          if events:
+            for event in events:
+              flattened = {'calendarId': calId, 'JSON': json.dumps(cleanJSON(event, timeObjects=EVENT_TIME_OBJECTS), ensure_ascii=False, sort_keys=False)}
+              if user:
+                flattened['primaryEmail'] = user
+              csvRows.append(flattened)
+          elif GC.Values[GC.CSV_OUTPUT_USERS_AUDIT] and user:
+            csvRows.append({'primaryEmail': user, 'calendarId': calId, 'JSON': json.dumps({})})
+      else:
+        flattened = {'calendarId': calId}
+        if user:
+          flattened['primaryEmail'] = user
+        flattened['events'] = jcount
+        csvRows.append(flattened)
 
 def _getCalendarCreateImportEventOptions(function):
   body = {}
@@ -19162,15 +19174,21 @@ def _getCalendarPrintShowEventOptions(calendarEventEntity, csvFormat, entityType
       pass
     elif myarg == 'fields':
       _getEventFields(fieldsList)
+    elif myarg == 'countsonly':
+      calendarEventEntity['countsOnly'] = True
     else:
       FJQC.GetFormatJSONQuoteChar(myarg, None)
+  if calendarEventEntity['countsOnly']:
+    fieldsList = ['id']
   sortTitles = []
   if csvFormat:
     if entityType == Ent.USER:
       sortTitles = ['primaryEmail', 'calendarId']
     else: # Ent.CALENDAR:
       sortTitles = ['calendarId']
-    if not FJQC.formatJSON:
+    if calendarEventEntity['countsOnly']:
+      sortTitles.append('events')
+    elif not FJQC.formatJSON:
       if not fieldsList:
         sortTitles.extend(EVENT_PRINT_ORDER)
     else:
@@ -19179,8 +19197,9 @@ def _getCalendarPrintShowEventOptions(calendarEventEntity, csvFormat, entityType
   return (todrive, FJQC, fieldsList, sortTitles)
 
 # gam calendars <CalendarEntity> print events <EventEntity> <EventDisplayProperties>* [fields <EventFieldNameList>]
-#	[formatjson] [quotechar <Character>] [todrive <ToDriveAttributes>*]
-# gam calendars <CalendarEntity> show events <EventEntity> <EventDisplayProperties>* [fields <EventFieldNameList>] [formatjson]
+#	[countsonly] [formatjson] [quotechar <Character>] [todrive <ToDriveAttributes>*]
+# gam calendars <CalendarEntity> show events <EventEntity> <EventDisplayProperties>* [fields <EventFieldNameList>]
+#	[countsonly] [formatjson]
 def doCalendarsPrintShowEvents(cal, calIds):
   calendarEventEntity = getCalendarEventEntity(noIds=True)
   csvFormat = Act.csvFormat()
@@ -28082,8 +28101,9 @@ def infoCalendarEvents(users):
     Ind.Decrement()
 
 # gam <UserTypeEntity> print events <UserCalendarEntity> <EventEntity> <EventDisplayProperties>* [fields <EventFieldNameList>]
-#	[formatjson] [quotechar <Character>] [todrive <ToDriveAttributes>*]
-# gam <UserTypeEntity> show events <UserCalendarEntity> <EventEntity> <EventDisplayProperties>* [fields <EventFieldNameList>] [formatjson]
+#	[countsonly] [formatjson] [quotechar <Character>] [todrive <ToDriveAttributes>*]
+# gam <UserTypeEntity> show events <UserCalendarEntity> <EventEntity> <EventDisplayProperties>* [fields <EventFieldNameList>]
+#	[countsonly] [formatjson]
 def printShowCalendarEvents(users):
   todrive = {}
   calendarEntity = getUserCalendarEntity()
@@ -28098,7 +28118,8 @@ def printShowCalendarEvents(users):
   for user in users:
     i += 1
     origUser = user
-    user, cal, calIds, jcount = _validateUserGetCalendarIds(user, i, count, calendarEntity, Ent.EVENT, Act.MODIFIER_FROM, showAction=not csvFormat and not FJQC.formatJSON)
+    user, cal, calIds, jcount = _validateUserGetCalendarIds(user, i, count, calendarEntity, Ent.EVENT, Act.MODIFIER_FROM,
+                                                            showAction=not csvFormat and not FJQC.formatJSON)
     if jcount == 0:
       continue
     Ind.Increment()
