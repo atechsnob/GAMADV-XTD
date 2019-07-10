@@ -2439,11 +2439,10 @@ gam create vaultexport|export matter <MatterItem> [name <String>] corpus drive|m
         (accounts <EmailAddressEntity>) | (orgunit|org|ou <OrgUnitPath>) | (teamdrives <TeamDriveIDList>) | (rooms <RoomList>) | everyone
         [scope <all_data|held_data|unprocessed_data>]
         [terms <String>] [start|starttime <Date>|<Time>] [end|endtime <Date>|<Time>] [timezone <TimeZone>]
-        [excludedrafts <Boolean>] [format mbox|pst]
+        [excludedrafts <Boolean>] [format mbox|pst] [showconfidentialmodecontent <Boolean>]
         [includerooms <Boolean>]
-        [includeteamdrives <Boolean>] [driveversiondate <Date>|<Time>]
-        [includeaccessinfo <Boolean>]
-        [showdetails]
+        [includeteamdrives <Boolean>] [driveversiondate <Date>|<Time>] [includeaccessinfo <Boolean>]
+        [region any|europe|us] [showdetails]
 gam delete vaultexport|export <ExportItem> matter <MatterItem>
 gam delete vaultexport|export <MatterItem> <ExportItem>
 gam download vaultexport|export <ExportItem> matter <MatterItem> [targetfolder <FilePath>] [targetname <FileName>] [noverify] [noextract] [ziptostdout]

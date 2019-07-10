@@ -1,3 +1,7 @@
+4.88.12
+
+Added options `region any|europe|us` and `showconfidentialmodecontent <Boolean>` to `gam create vaultexport|export matter`.
+
 4.88.11
 
 Recoded `gam create/update course`.
