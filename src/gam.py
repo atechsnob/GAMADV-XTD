@@ -19765,6 +19765,11 @@ VAULT_EXPORT_FORMAT_MAP = {
   'mbox': 'MBOX',
   'pst': 'PST',
   }
+VAULT_EXPORT_REGION_MAP = {
+  'any': 'ANY',
+  'europe': 'EUROPE',
+  'us': 'US',
+  }
 VAULT_CORPUS_OPTIONS_MAP = {
   'DRIVE': 'driveOptions',
   'MAIL': 'mailOptions',
