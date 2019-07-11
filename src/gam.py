@@ -22,7 +22,7 @@ For more information, see https://github.com/taers232c/GAMADV-XTD
 """
 
 __author__ = 'Ross Scroggs <ross.scroggs@gmail.com>'
-__version__ = '4.88.13'
+__version__ = '4.89.00'
 __license__ = 'Apache License 2.0 (http://www.apache.org/licenses/LICENSE-2.0)'
 
 import base64
@@ -36452,7 +36452,6 @@ def printShowSheetRanges(users):
       FJQC.GetFormatJSONQuoteChar(myarg, titles if csvFormat else None)
   if csvFormat:
     if not FJQC.formatJSON:
-      addTitlesToCSVfile(['range', 'majorDimension', 'values'], titles)
       sortTitles = titles['list'][:]
     else:
       sortTitles = None
@@ -36467,10 +36466,11 @@ def printShowSheetRanges(users):
     for spreadsheetId in spreadsheetIdEntity['list']:
       j += 1
       try:
-        result = callGAPIitems(sheet.spreadsheets().values(), 'batchGet', 'valueRanges',
-                               throw_reasons=GAPI.SHEETS_ACCESS_THROW_REASONS,
-                               spreadsheetId=spreadsheetId, ranges=spreadsheetRanges, **kwargs)
-        kcount = len(result)
+        result = callGAPI(sheet.spreadsheets().values(), 'batchGet',
+                          throw_reasons=GAPI.SHEETS_ACCESS_THROW_REASONS,
+                          spreadsheetId=spreadsheetId, ranges=spreadsheetRanges, fields='valueRanges', **kwargs)
+        valueRanges = result.get('valueRanges', [])
+        kcount = len(valueRanges)
         if not csvFormat:
           if FJQC.formatJSON:
             printLine('{{"User": "{0}", "spreadsheetId": "{1}", "JSON": {2}}}'.format(user, spreadsheetId, json.dumps(result, ensure_ascii=False, sort_keys=False)))
@@ -36478,13 +36478,13 @@ def printShowSheetRanges(users):
           entityPerformActionNumItems([Ent.USER, user, Ent.SPREADSHEET, spreadsheetId], kcount, Ent.SPREADSHEET_RANGE, j, jcount)
           Ind.Increment()
           k = 0
-          for valueRange in result:
+          for valueRange in valueRanges:
             k += 1
             printKeyValueListWithCount(['range', valueRange['range']], k, kcount)
             _showValueRange(valueRange)
           Ind.Decrement()
         else:
-          if result:
+          if kcount:
             if FJQC.formatJSON:
               csvRows.append({'User': user, 'spreadsheetId': spreadsheetId, 'JSON': json.dumps(result, ensure_ascii=False, sort_keys=False)})
             else:
