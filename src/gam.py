@@ -18972,7 +18972,7 @@ def _purgeCalendarEvents(origUser, user, cal, calIds, count, calendarEventEntity
       _updateDeleteCalendarEvents(origUser, user, cal, calIds, count, 'delete', calendarEventEntity, doIt,
                                   False, {}, parameters)
     Act.Set(Act.MOVE)
-    _moveCalendarEvents(origUser, user, cal, calIds, count, calendarEventEntity, purgeCalId, False)
+    _moveCalendarEvents(origUser, user, cal, calIds, count, calendarEventEntity, purgeCalId, parameters['sendUpdates'])
     Ind.Decrement()
     callGAPI(cal.calendars(), 'delete',
              throw_reasons=GAPI.CALENDAR_THROW_REASONS+[GAPI.NOT_FOUND, GAPI.FORBIDDEN],
@@ -18991,7 +18991,7 @@ def doCalendarsPurgeEvents(cal, calIds):
   _purgeCalendarEvents(None, None, cal, calIds, len(calIds), calendarEventEntity, doIt, parameters, False)
 
 # gam calendars <CalendarEntity> wipe events
-# gam calendar <UserItem> wipe
+# gam calendar <CalendarEntity> wipe
 def doCalendarsWipeEvents(cal, calIds):
   checkArgumentPresent([Cmd.ARG_EVENT, Cmd.ARG_EVENTS])
   checkForExtraneousArguments()
@@ -19028,7 +19028,7 @@ def _emptyCalendarTrash(user, cal, calIds, count):
       entityPerformActionNumItems([Ent.CALENDAR, calId], jcount, Ent.TRASHED_EVENT, i, count)
       Ind.Increment()
     if jcount > 0:
-      _purgeCalendarEvents(user, user, cal, [calId], 1, calendarEventEntity, True, False, True)
+      _purgeCalendarEvents(user, user, cal, [calId], 1, calendarEventEntity, True, {'sendUpdates': 'none'}, True)
     if not user:
       Ind.Decrement()
 
