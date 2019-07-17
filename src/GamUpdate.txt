@@ -1,3 +1,8 @@
+4.89.02
+
+Added options to `gam update calattendees` to allow easier specification of multiple attendees.
+* https://github.com/taers232c/GAMADV-XTD/wiki/Users-Calendars-Events#update-calendar-event-attendees
+
 4.89.01
 
 Added the ability to select fields in `gam print/show drivefileacls` and `gam print/show teamdriveacls`.

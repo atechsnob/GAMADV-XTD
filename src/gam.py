@@ -22,7 +22,7 @@ For more information, see https://github.com/taers232c/GAMADV-XTD
 """
 
 __author__ = 'Ross Scroggs <ross.scroggs@gmail.com>'
-__version__ = '4.89.01'
+__version__ = '4.89.02'
 __license__ = 'Apache License 2.0 (http://www.apache.org/licenses/LICENSE-2.0)'
 
 import base64
@@ -18431,6 +18431,15 @@ def _getCalendarEventAttribute(myarg, body, parameters, function):
     return False
   return True
 
+def _getEventMatchFields(calendarEventEntity, fieldsList):
+  for match in calendarEventEntity['matches']:
+    if match[0][0] != 'attendees':
+      fieldsList.append(match[0][0])
+    else:
+      fieldsList.append('attendees/email')
+      if match[0][1] == 'status':
+        fieldsList.extend('attendees/optional', 'attendees/responseStatus')
+
 def _eventMatches(event, match):
   if match[0][0] != 'attendees':
     eventAttr = event
@@ -18476,10 +18485,9 @@ def _validateCalendarGetEventIDs(origUser, user, cal, calId, j, jcount, calendar
     calEventIds = calendarEventEntity['list']
   calId = normalizeCalendarId(calId, user)
   if not calEventIds:
-    fieldList = ['id']
-    for match in calendarEventEntity['matches']:
-      fieldList.append(match[0][0])
-    fields = ','.join(fieldList)
+    fieldsList = ['id']
+    _getEventMatchFields(calendarEventEntity, fieldsList)
+    fields = ','.join(fieldsList)
     try:
       eventIdsSet = set()
       calEventIds = []
@@ -19162,7 +19170,7 @@ def _getEventFields(fieldsList):
 
 def _addEventEntitySelectFields(calendarEventEntity, fieldsList):
   if fieldsList:
-    fieldsList.extend([match[0][0] for match in calendarEventEntity['matches']])
+    _getEventMatchFields(calendarEventEntity, fieldsList)
     if calendarEventEntity['maxinstances'] != -1:
       fieldsList.append('recurrence')
 
@@ -19218,6 +19226,8 @@ def _getCalendarPrintShowEventOptions(calendarEventEntity, csvFormat, entityType
   _addEventEntitySelectFields(calendarEventEntity, fieldsList)
   return (todrive, FJQC, fieldsList, sortTitles)
 
+EVENT_INDEXED_TITLES = ['attendees', 'attachments', 'recurrence']
+
 # gam calendars <CalendarEntity> print events <EventEntity> <EventDisplayProperties>* [fields <EventFieldNameList>]
 #	[countsonly] [formatjson] [quotechar <Character>] [todrive <ToDriveAttributes>*]
 # gam calendars <CalendarEntity> show events <EventEntity> <EventDisplayProperties>* [fields <EventFieldNameList>]
@@ -19233,7 +19243,8 @@ def doCalendarsPrintShowEvents(cal, calIds):
   _printShowCalendarEvents(None, None, cal, calIds, len(calIds), calendarEventEntity,
                            csvFormat, FJQC, fieldsList, csvRows, titles)
   if csvFormat:
-    writeCSVfile(csvRows, titles, 'Calendar Events', todrive, sortTitles, FJQC.quoteChar)
+    writeCSVfile(csvRows, titles, 'Calendar Events', todrive, sortTitles, FJQC.quoteChar,
+                 indexedFields=EVENT_INDEXED_TITLES)
 
 # <CalendarSettings> ::==
 #	[description <String>] [location <String>] [summary <String>] [timezone <TimeZone>]
@@ -27952,10 +27963,16 @@ def emptyCalendarTrash(users):
 
 # gam <UserTypeEntity> update calattendees <UserCalendarEntity> <EventEntity> [anyorganizer] [<EventNotificationAttribute>] [doit]
 #	(csv <FileName>|(gsheet <UserGoogleSheet>))*
-#	(add <EmailAddress>)* (delete <EmailAddress>)* (replace <EmailAddress> <EmailAddress>)*
+#	(delete <EmailAddress>)*
+#	(deleteentity <EmailAddressEntity>)*
+#	(add <EmailAddress>)*
+#	(addentity <EmailAddressEntity>)*
 #	(addstatus [<AttendeeAttendance>] [<AttendeeStatus>] <EmailAddress>)*
+#	(addentitystatus [<AttendeeAttendance>] [<AttendeeStatus>] <EmailAddressEntity>)*
+#	(replace <EmailAddress> <EmailAddress>)*
 #	(replacestatus [<AttendeeAttendance>] [<AttendeeStatus>] <EmailAddress> <EmailAddress>)*
 #	(updatestatus [<AttendeeAttendance>] [<AttendeeStatus>] <EmailAddress>)*
+#	(updateentitystatus [<AttendeeAttendance>] [<AttendeeStatus>] <EmailAddressEntity>)*
 def updateCalendarAttendees(users):
   def getStatus(option):
     if option.endswith('status'):
@@ -28003,14 +28020,25 @@ def updateCalendarAttendees(users):
     elif myarg == 'delete':
       updAddr = getEmailAddress(noUid=True)
       attendeeMap[updAddr] = {'op': 'delete'}
+    elif myarg == 'deleteentity':
+      for updAddr in getNormalizedEmailAddressEntity(noUid=True):
+        attendeeMap[updAddr] = {'op': 'delete'}
     elif myarg in ['add', 'addstatus']:
       updOptional, updStatus = getStatus(myarg)
       updAddr = getEmailAddress(noUid=True)
       attendeeMap[updAddr] = {'op': 'add', 'status': updStatus, 'optional': updOptional, 'done': False}
+    elif myarg in ['addentity', 'addentitystatus']:
+      updOptional, updStatus = getStatus(myarg)
+      for updAddr in getNormalizedEmailAddressEntity(noUid=True):
+        attendeeMap[updAddr] = {'op': 'add', 'status': updStatus, 'optional': updOptional, 'done': False}
     elif myarg in ['update', 'updatestatus']:
       updOptional, updStatus = getStatus(myarg)
       updAddr = getEmailAddress(noUid=True)
       attendeeMap[updAddr] = {'op': 'update', 'status': updStatus, 'optional': updOptional, 'done': False}
+    elif myarg in ['updateentity', 'updateentitystatus']:
+      updOptional, updStatus = getStatus(myarg)
+      for updAddr in getNormalizedEmailAddressEntity(noUid=True):
+        attendeeMap[updAddr] = {'op': 'update', 'status': updStatus, 'optional': updOptional, 'done': False}
     elif myarg in ['replace', 'replacestatus']:
       updOptional, updStatus = getStatus(myarg)
       updAddr = getEmailAddress(noUid=True)
@@ -28201,7 +28229,8 @@ def printShowCalendarEvents(users):
                              csvFormat, FJQC, fieldsList, csvRows, titles)
     Ind.Decrement()
   if csvFormat:
-    writeCSVfile(csvRows, titles, 'Calendar Events', todrive, sortTitles, FJQC.quoteChar)
+    writeCSVfile(csvRows, titles, 'Calendar Events', todrive, sortTitles, FJQC.quoteChar,
+                 indexedFields=EVENT_INDEXED_TITLES)
 
 def _getEntityMimeType(fileEntry):
   return Ent.DRIVE_FOLDER if fileEntry['mimeType'] == MIMETYPE_GA_FOLDER else Ent.DRIVE_FILE
