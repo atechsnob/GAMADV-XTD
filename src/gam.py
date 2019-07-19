@@ -36661,7 +36661,7 @@ def _printShowTokens(entityType, users):
     else:
       unknownArgumentExit()
   if not entityType:
-    users = getUsersToModify(Cmd.ENTITY_ALL_USERS, None)
+    users = getUsersToModify(Cmd.ENTITY_ALL_USERS_NS, None)
   fields = ','.join(TOKENS_FIELDS_TITLES)
   i, count, users = getEntityArgument(users)
   for user in users:
