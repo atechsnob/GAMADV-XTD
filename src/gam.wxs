@@ -41,7 +41,7 @@
     <ComponentGroup
         Id="ProductComponents"
         Directory="INSTALLFOLDER"
-        Source="gamadv-xtd-64">
+        Source="gamadv-xtd">
       <Component Id="gam_exe" Guid="e21d6106-f77d-4df8-910a-8f2d5a716171">
         <File Name="gam.exe" KeyPath="yes" />
         <Environment Id="PATH" Name="PATH" Value="[INSTALLFOLDER]" Permanent="yes" Part="last" Action="set" System="yes" />

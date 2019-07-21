@@ -1,3 +1,7 @@
+4.89.04
+
+Executable versions of GAMADV-XTD are now built with PyInstaller 3.5.
+
 4.89.03
 
 Added options to `<UserTypeEntity>` to allow a greater selection of users based on suspension status:
