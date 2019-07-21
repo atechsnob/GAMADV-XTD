@@ -3017,7 +3017,7 @@ def SetGlobalVariables():
 def handleServerError(e):
   systemErrorExit(NETWORK_ERROR_RC, str(e))
 
-def getHttpObj(cache=None, timeout==None):
+def getHttpObj(cache=None, timeout=None):
   return httplib2.Http(cache=cache,
                        timeout=timeout,
                        ca_certs=GC.Values[GC.CACERTS_PEM],
