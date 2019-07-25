@@ -1,3 +1,11 @@
+4.89.06
+
+Add code to handle a rare API error when creating a group.
+
+4.89.05
+
+Skipped.
+
 4.89.04
 
 Executable versions of GAMADV-XTD are now built with PyInstaller 3.5.
