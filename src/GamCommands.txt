@@ -676,7 +676,9 @@ gam <CrOSTypeEntity>|<UserTypeEntity> list [todrive <ToDriveAttribute>*] [data <
 # Authorization
 
 gam create|add project [<EmailAddress>] [<ProjectID>]
+gam create project [admin <EmailAddress>] [project <ProjectID>]
 gam use project [<EmailAddress>] [<ProjectID>]
+gam use project [admin <EmailAddress>] [project <ProjectID>]
 gam update project [<EmailAddress>] [gam|<ProjectID>|(filter <String>)]
 gam delete project [<EmailAddress>] [gam|<ProjectID>|(filter <String>)]
 gam show projects [<EmailAddress>] [all|gam|<ProjectID>|(filter <String>)]
@@ -1825,7 +1827,9 @@ gam show licenses [(products|product <ProductIDList>)|(skus|sku <SKUIDList>)|all
         cancel_remote_wipe_then_block
 
 gam update mobile <MobileEntity> action <MobileAction>
+        [doit] [matchusers <UserTypeEntity>]
 gam delete mobile <MobileEntity>
+        [doit] [matchusers <UserTypeEntity>]
 
 <MobileFieldName> ::=
         adbstatus|
