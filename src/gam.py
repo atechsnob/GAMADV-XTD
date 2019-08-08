@@ -22,7 +22,7 @@ For more information, see https://github.com/taers232c/GAMADV-XTD
 """
 
 __author__ = 'Ross Scroggs <ross.scroggs@gmail.com>'
-__version__ = '4.90.00'
+__version__ = '4.90.01'
 __license__ = 'Apache License 2.0 (http://www.apache.org/licenses/LICENSE-2.0)'
 
 import base64
@@ -35976,6 +35976,77 @@ def deleteUserFromGroups(users):
         entityActionFailedWarning([Ent.USER, user], str(e), j, jcount)
     Ind.Decrement()
 
+# gam <UserTypeEntity> print groups [roles <GroupRoleList>] [domain <DomainName>] [todrive <ToDriveAttributes>*]
+# gam <UserTypeEntity> show groups [roles <GroupRoleList>] [domain <DomainName>]
+def printShowUserGroups(users):
+  cd = buildGAPIObject(API.DIRECTORY)
+  kwargs = {}
+  csvFormat = Act.csvFormat()
+  if csvFormat:
+    todrive = {}
+    titles, csvRows = initializeTitlesCSVfile(['User', 'Group', 'Role'])
+  rolesSet = set()
+  while Cmd.ArgumentsRemaining():
+    myarg = getArgument()
+    if csvFormat and myarg == 'todrive':
+      todrive = getTodriveParameters()
+    elif myarg == 'domain':
+      kwargs['domain'] = getString(Cmd.OB_DOMAIN_NAME).lower()
+    elif myarg in ['role', 'roles']:
+      for role in getString(Cmd.OB_GROUP_ROLE_LIST).lower().replace(',', ' ').split():
+        if role in GROUP_ROLES_MAP:
+          rolesSet.add(GROUP_ROLES_MAP[role])
+        else:
+          invalidChoiceExit(GROUP_ROLES_MAP, True)
+    else:
+      unknownArgumentExit()
+  if not rolesSet:
+    rolesSet = set([Ent.ROLE_MANAGER, Ent.ROLE_MEMBER, Ent.ROLE_OWNER])
+  i, count, users = getEntityArgument(users)
+  for user in users:
+    i += 1
+    user = checkUserExists(cd, user, i, count)
+    if not user:
+      continue
+    try:
+      entityList = callGAPIpages(cd.groups(), 'list', 'groups',
+                                 throw_reasons=[GAPI.INVALID_MEMBER, GAPI.RESOURCE_NOT_FOUND, GAPI.DOMAIN_NOT_FOUND,
+                                                GAPI.FORBIDDEN, GAPI.BAD_REQUEST, GAPI.INVALID_INPUT],
+                                 userKey=user, orderBy='email', fields='nextPageToken,groups(email)', **kwargs)
+    except GAPI.invalidMember:
+      badRequestWarning(Ent.GROUP, Ent.MEMBER, user)
+      continue
+    except (GAPI.resourceNotFound, GAPI.domainNotFound, GAPI.domainCannotUseApis, GAPI.forbidden, GAPI.badRequest):
+      if kwargs.get('domain'):
+        badRequestWarning(Ent.GROUP, Ent.DOMAIN, kwargs['domain'])
+        return
+      accessErrorExit(cd)
+    jcount = len(entityList)
+    if not csvFormat:
+      entityPerformActionModifierNumItems([Ent.USER, user], Msg.MAXIMUM_OF, jcount, Ent.GROUP, i, count)
+    Ind.Increment()
+    j = 0
+    for groupEntity in entityList:
+      j += 1
+      groupEmail = groupEntity['email']
+      try:
+        result = callGAPI(cd.members(), 'get',
+                          throw_reasons=GAPI.MEMBERS_THROW_REASONS+[GAPI.MEMBER_NOT_FOUND, GAPI.INVALID_MEMBER, GAPI.CONDITION_NOT_MET],
+                          retry_reasons=GAPI.MEMBERS_RETRY_REASONS,
+                          groupKey=groupEmail, memberKey=user, fields='role')
+        if result['role'] in rolesSet:
+          if not csvFormat:
+            printEntity([Ent.GROUP, groupEmail, Ent.ROLE, result['role']], j, jcount)
+          else:
+            csvRows.append({'User': user, 'Group': groupEmail, 'Role': result['role']})
+      except (GAPI.groupNotFound, GAPI.domainNotFound, GAPI.domainCannotUseApis, GAPI.invalid, GAPI.forbidden) as e:
+        entityUnknownWarning(Ent.GROUP, groupEmail, j, jcount)
+      except (GAPI.memberNotFound, GAPI.invalidMember, GAPI.conditionNotMet) as e:
+        entityActionFailedWarning([Ent.USER, user, Ent.GROUP, groupEmail], str(e), j, jcount)
+    Ind.Decrement()
+  if csvFormat:
+    writeCSVfile(csvRows, titles, 'User Groups', todrive)
+
 # License command utilities
 LICENSE_SKUID = 'skuId'
 LICENSE_PRODUCTID = 'productId'
@@ -40871,6 +40942,7 @@ USER_COMMANDS_WITH_OBJECTS = {
       Cmd.ARG_FORWARD:		printShowForward,
       Cmd.ARG_FORWARDINGADDRESS:	printShowForwardingAddresses,
       Cmd.ARG_GMAILPROFILE:	printShowGmailProfile,
+      Cmd.ARG_GROUP:		printShowUserGroups,
       Cmd.ARG_GUARDIAN: 	printShowGuardians,
       Cmd.ARG_LABEL:		printShowLabels,
       Cmd.ARG_MESSAGE:		printShowMessages,
@@ -40915,6 +40987,7 @@ USER_COMMANDS_WITH_OBJECTS = {
       Cmd.ARG_FORWARD:		printShowForward,
       Cmd.ARG_FORWARDINGADDRESS:	printShowForwardingAddresses,
       Cmd.ARG_GMAILPROFILE:	printShowGmailProfile,
+      Cmd.ARG_GROUP:		printShowUserGroups,
       Cmd.ARG_GUARDIAN: 	printShowGuardians,
       Cmd.ARG_IMAP:		showImap,
       Cmd.ARG_LABEL:		printShowLabels,
