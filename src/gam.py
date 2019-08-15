@@ -22547,6 +22547,8 @@ USER_SCALAR_PROPERTY_PRINT_ORDER = [
   'lastLoginTime',
   'deletionTime',
   'orgUnitPath',
+  'recoveryEmail',
+  'recoveryPhone',
   'thumbnailPhotoUrl',
   ]
 USER_ARRAY_PROPERTY_PRINT_ORDER = [
