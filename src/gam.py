@@ -22,7 +22,7 @@ For more information, see https://github.com/taers232c/GAMADV-XTD
 """
 
 __author__ = 'Ross Scroggs <ross.scroggs@gmail.com>'
-__version__ = '4.90.08'
+__version__ = '4.90.09'
 __license__ = 'Apache License 2.0 (http://www.apache.org/licenses/LICENSE-2.0)'
 
 import base64
@@ -10999,6 +10999,10 @@ CONTACT_USER_DEFINED_FIELDS = 'User Defined Fields'
 CONTACT_WEBSITES = 'Websites'
 CONTACT_GROUPS = 'ContactGroups'
 CONTACT_GROUPS_LIST = 'ContactGroupsList'
+CONTACT_ADD_GROUPS = 'ContactAddGroups'
+CONTACT_ADD_GROUPS_LIST = 'ContactAddGroupsList'
+CONTACT_REMOVE_GROUPS = 'ContactRemoveGroups'
+CONTACT_REMOVE_GROUPS_LIST = 'ContactRemoveGroupsList'
 #
 CONTACT_GROUP_ID = 'ContactGroupID'
 CONTACT_GROUP_UPDATED = 'Updated'
@@ -11061,6 +11065,10 @@ class ContactsManager(object):
     'websites': CONTACT_WEBSITES,
     'contactgroup': CONTACT_GROUPS,
     'contactgroups': CONTACT_GROUPS,
+    'addcontactgroup': CONTACT_ADD_GROUPS,
+    'addcontactgroups': CONTACT_ADD_GROUPS,
+    'removecontactgroup': CONTACT_REMOVE_GROUPS,
+    'removecontactgroups': CONTACT_REMOVE_GROUPS,
     'updated': CONTACT_UPDATED,
     }
 
@@ -11610,6 +11618,16 @@ class ContactsManager(object):
           Cmd.Backup()
           unknownArgumentExit()
         AppendItemToFieldsList(CONTACT_GROUPS_LIST, getString(Cmd.OB_STRING))
+      elif fieldName == CONTACT_ADD_GROUPS:
+        if entityType != Ent.USER:
+          Cmd.Backup()
+          unknownArgumentExit()
+        AppendItemToFieldsList(CONTACT_ADD_GROUPS_LIST, getString(Cmd.OB_STRING))
+      elif fieldName == CONTACT_REMOVE_GROUPS:
+        if entityType != Ent.USER:
+          Cmd.Backup()
+          unknownArgumentExit()
+        AppendItemToFieldsList(CONTACT_REMOVE_GROUPS_LIST, getString(Cmd.OB_STRING))
       else:
         fields[fieldName] = getString(Cmd.OB_STRING, minLen=0)
     return fields
@@ -11755,6 +11773,18 @@ class ContactsManager(object):
       else:
         contactEntry.groupMembershipInfo = []
 
+  @staticmethod
+  def AddFilteredContactGroupsToContact(contactsObject, contactEntry, contactGroupsList, user, contactRemoveGroupsList):
+    contactEntry.groupMembershipInfo = []
+    for groupId in contactGroupsList:
+      if groupId not in contactRemoveGroupsList:
+        contactEntry.groupMembershipInfo.append(gdata.apps.contacts.GroupMembershipInfo(deleted='false',
+                                                                                        href=contactsObject.GetContactGroupFeedUri(contact_list=user, projection='base', groupId=groupId)))
+  @staticmethod
+  def AddAdditionalContactGroupsToContact(contactsObject, contactEntry, contactGroupsList, user):
+    for groupId in contactGroupsList:
+      contactEntry.groupMembershipInfo.append(gdata.apps.contacts.GroupMembershipInfo(deleted='false',
+                                                                                      href=contactsObject.GetContactGroupFeedUri(contact_list=user, projection='base', groupId=groupId)))
   @staticmethod
   def ContactToFields(contactEntry):
     fields = {}
@@ -12123,11 +12153,12 @@ def validateContactGroup(contactsManager, contactsObject, contactGroupName,
       return (contactGroupNames[sgContactGroupName][0], contactGroupIDs, contactGroupNames)
   return (None, contactGroupIDs, contactGroupNames)
 
-def validateContactGroupsList(contactsManager, contactsObject, contactId, fields, entityType, entityName, i, count):
+def validateContactGroupsList(contactsManager, contactsObject, contactId,
+                              fields, groupsListField, entityType, entityName, i, count):
   result = True
   contactGroupIDs = contactGroupNames = None
   contactGroupsList = []
-  for contactGroup in fields[CONTACT_GROUPS_LIST]:
+  for contactGroup in fields[groupsListField]:
     groupId, contactGroupIDs, contactGroupNames = validateContactGroup(contactsManager, contactsObject, contactGroup,
                                                                        contactGroupIDs, contactGroupNames, entityType, entityName, i, count)
     if groupId:
@@ -12150,7 +12181,8 @@ def _createContact(users, entityType):
     if not contactsObject:
       continue
     if fields.get(CONTACT_GROUPS_LIST):
-      result, contactGroupsList = validateContactGroupsList(contactsManager, contactsObject, '', fields, entityType, user, i, count)
+      result, contactGroupsList = validateContactGroupsList(contactsManager, contactsObject, '',
+                                                            fields, CONTACT_GROUPS_LIST, entityType, user, i, count)
       if not result:
         continue
       contactsManager.AddContactGroupsToContact(contactsObject, contactEntry, contactGroupsList, user)
@@ -12221,7 +12253,11 @@ def _clearUpdateContacts(users, entityType, updateContacts):
     if jcount == 0:
       setSysExitRC(NO_ENTITIES_FOUND)
       continue
-    contactGroupsList = None
+    contactGroupsList = {
+      CONTACT_GROUPS_LIST: [],
+      CONTACT_ADD_GROUPS_LIST: [],
+      CONTACT_REMOVE_GROUPS_LIST: []
+      }
     Ind.Increment()
     for contact in entityList:
       j += 1
@@ -12239,15 +12275,27 @@ def _clearUpdateContacts(users, entityType, updateContacts):
           if not localContactSelects(contactsManager, contactQuery, fields):
             continue
         if updateContacts:
-          if update_fields.get(CONTACT_GROUPS_LIST) and not contactGroupsList:
-            result, contactGroupsList = validateContactGroupsList(contactsManager, contactsObject, contactId, update_fields, entityType, user, i, count)
-            if not result:
-              break
+          groupError = False
+          for field in [CONTACT_GROUPS_LIST, CONTACT_ADD_GROUPS_LIST, CONTACT_REMOVE_GROUPS_LIST]:
+            if update_fields.get(field) and not contactGroupsList[field]:
+              result, contactGroupsList[field] = validateContactGroupsList(contactsManager, contactsObject, contactId,
+                                                                           update_fields, field, entityType, user, i, count)
+              if not result:
+                groupError = True
+          if groupError:
+            break
           for field in update_fields:
             fields[field] = update_fields[field]
           contactEntry = contactsManager.FieldsToContact(fields)
-          if contactGroupsList:
-            contactsManager.AddContactGroupsToContact(contactsObject, contactEntry, contactGroupsList, user)
+          if contactGroupsList[CONTACT_GROUPS_LIST]:
+            contactsManager.AddContactGroupsToContact(contactsObject, contactEntry, contactGroupsList[CONTACT_GROUPS_LIST], user)
+          elif contactGroupsList[CONTACT_ADD_GROUPS_LIST] or contactGroupsList[CONTACT_REMOVE_GROUPS_LIST]:
+            contactEntry.groupMembershipInfo = []
+            if fields.get(CONTACT_GROUPS):
+              contactsManager.AddFilteredContactGroupsToContact(contactsObject, contactEntry, fields[CONTACT_GROUPS], user,
+                                                                contactGroupsList[CONTACT_REMOVE_GROUPS_LIST])
+            if contactGroupsList[CONTACT_ADD_GROUPS_LIST]:
+              contactsManager.AddAdditionalContactGroupsToContact(contactsObject, contactEntry, contactGroupsList[CONTACT_ADD_GROUPS_LIST], user)
           elif fields.get(CONTACT_GROUPS):
             contactsManager.AddContactGroupsToContact(contactsObject, contactEntry, fields[CONTACT_GROUPS], user)
         else:
@@ -13477,8 +13525,7 @@ CROS_SCALAR_PROPERTY_PRINT_ORDER = [
   'willAutoRenew',
   ]
 
-CROS_TIME_OBJECTS = set(['autoUpdateExpiration', 'lastSync', 'lastEnrollmentTime', 'supportEndDate', 'reportTime'])
-CROS_TIMESTAMP_OBJECTS = set(['autoUpdateExpiration'])
+CROS_TIME_OBJECTS = set(['lastSync', 'lastEnrollmentTime', 'supportEndDate', 'reportTime'])
 CROS_FIELDS_WITH_CRS_NLS = ['notes']
 CROS_ACTIVE_TIME_RANGES_ARGUMENTS = ['timeranges', 'activetimeranges', 'times']
 CROS_RECENT_USERS_ARGUMENTS = ['recentusers', 'users']
@@ -13569,6 +13616,8 @@ def infoCrOSDevices(entityList):
       checkEntityAFDNEorAccessErrorExit(cd, Ent.CROS_DEVICE, deviceId, i, count)
       continue
     checkTPMVulnerability(cros)
+    if 'autoUpdateExpiration' in cros:
+      cros['autoUpdateExpiration'] = formatLocalDatestamp(cros['autoUpdateExpiration'])
     if guessAUE:
       guessCrosAUEDate(cros, guessedAUEs)
     if FJQC.formatJSON:
@@ -13583,10 +13632,8 @@ def infoCrOSDevices(entityList):
             printKeyValueList([up, cros[up]])
           else:
             printKeyValueWithCRsNLs(up, cros[up])
-        elif up not in CROS_TIMESTAMP_OBJECTS:
-          printKeyValueList([up, formatLocalTime(cros[up])])
         else:
-          printKeyValueList([up, formatLocalTimestamp(cros[up])])
+          printKeyValueList([up, formatLocalTime(cros[up])])
     up = 'tpmVersionInfo'
     if up in cros:
       printKeyValueList([up, ''])
@@ -13875,6 +13922,8 @@ def doPrintCrOSDevices(entityList=None):
 
   def _printCrOS(cros):
     checkTPMVulnerability(cros)
+    if 'autoUpdateExpiration' in cros:
+      cros['autoUpdateExpiration'] = formatLocalDatestamp(cros['autoUpdateExpiration'])
     if guessAUE:
       guessCrosAUEDate(cros, guessedAUEs)
     if FJQC.formatJSON:
@@ -13895,10 +13944,8 @@ def doPrintCrOSDevices(entityList=None):
                             'deviceFiles', 'cpuStatusReports', 'diskVolumeReports', 'systemRamFreeReports']):
         if attrib not in CROS_TIME_OBJECTS:
           row[attrib] = cros[attrib]
-        elif attrib not in CROS_TIMESTAMP_OBJECTS:
-          row[attrib] = formatLocalTime(cros[attrib])
         else:
-          row[attrib] = formatLocalTimestamp(cros[attrib])
+          row[attrib] = formatLocalTime(cros[attrib])
     attrib = 'tpmVersionInfo'
     if attrib in cros:
       for key, value in sorted(iteritems(cros[attrib])):
