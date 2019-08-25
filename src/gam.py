@@ -22,7 +22,7 @@ For more information, see https://github.com/taers232c/GAMADV-XTD
 """
 
 __author__ = 'Ross Scroggs <ross.scroggs@gmail.com>'
-__version__ = '4.90.09'
+__version__ = '4.93.00'
 __license__ = 'Apache License 2.0 (http://www.apache.org/licenses/LICENSE-2.0)'
 
 import base64
@@ -976,9 +976,9 @@ def normalizeEmailAddressOrUID(emailAddressOrUID, noUid=False, checkForCustomerI
     return emailAddressOrUID[1:].lower() if not noLower else emailAddressOrUID[1:]
   if (atLoc == -1) or (atLoc == len(emailAddressOrUID)-1) and GC.Values[GC.DOMAIN]:
     if atLoc == -1:
-      emailAddressOrUID = '{0}@{1}'.format(emailAddressOrUID, GC.Values[GC.DOMAIN].lower())
+      emailAddressOrUID = '{0}@{1}'.format(emailAddressOrUID, GC.Values[GC.DOMAIN])
     else:
-      emailAddressOrUID = '{0}{1}'.format(emailAddressOrUID, GC.Values[GC.DOMAIN].lower())
+      emailAddressOrUID = '{0}{1}'.format(emailAddressOrUID, GC.Values[GC.DOMAIN])
   return emailAddressOrUID.lower() if not noLower else emailAddressOrUID
 
 # Normalize student/guardian email address/uid
@@ -1006,12 +1006,12 @@ def getEmailAddress(noUid=False, minLen=1, optional=False):
         atLoc = emailAddress.find('@')
         if atLoc == -1:
           if GC.Values[GC.DOMAIN]:
-            emailAddress = '{0}@{1}'.format(emailAddress, GC.Values[GC.DOMAIN].lower())
+            emailAddress = '{0}@{1}'.format(emailAddress, GC.Values[GC.DOMAIN])
           Cmd.Advance()
           return emailAddress
         if atLoc != 0:
           if (atLoc == len(emailAddress)-1) and GC.Values[GC.DOMAIN]:
-            emailAddress = '{0}{1}'.format(emailAddress, GC.Values[GC.DOMAIN].lower())
+            emailAddress = '{0}{1}'.format(emailAddress, GC.Values[GC.DOMAIN])
           Cmd.Advance()
           return emailAddress
         invalidArgumentExit('name@domain')
@@ -1049,12 +1049,12 @@ def getPermissionId():
           Cmd.Advance()
           return (False, 'anyoneWithLink')
         if GC.Values[GC.DOMAIN]:
-          emailAddress = '{0}@{1}'.format(emailAddress, GC.Values[GC.DOMAIN].lower())
+          emailAddress = '{0}@{1}'.format(emailAddress, GC.Values[GC.DOMAIN])
         Cmd.Advance()
         return (True, emailAddress)
       if atLoc != 0:
         if (atLoc == len(emailAddress)-1) and GC.Values[GC.DOMAIN]:
-          emailAddress = '{0}{1}'.format(emailAddress, GC.Values[GC.DOMAIN].lower())
+          emailAddress = '{0}{1}'.format(emailAddress, GC.Values[GC.DOMAIN])
         Cmd.Advance()
         return (True, emailAddress)
       invalidArgumentExit('name@domain')
@@ -1671,7 +1671,7 @@ def getMaxMessageBytes(oneKiloBytes, oneMegaBytes):
 def getEmailAddressDomain(emailAddress):
   atLoc = emailAddress.find('@')
   if atLoc == -1:
-    return GC.Values[GC.DOMAIN].lower()
+    return GC.Values[GC.DOMAIN]
   return emailAddress[atLoc+1:].lower()
 
 # Get user name from email address
@@ -1685,7 +1685,7 @@ def getEmailAddressUsername(emailAddress):
 def splitEmailAddress(emailAddress):
   atLoc = emailAddress.find('@')
   if atLoc == -1:
-    return (emailAddress.lower(), GC.Values[GC.DOMAIN].lower())
+    return (emailAddress.lower(), GC.Values[GC.DOMAIN])
   return (emailAddress[:atLoc].lower(), emailAddress[atLoc+1:].lower())
 
 def formatFileSize(fileSize):
@@ -1860,13 +1860,16 @@ def userSvcNotApplicableOrDriveDisabled(user, errMessage, i=0, count=0):
     entityActionNotPerformedWarning([Ent.USER, user], errMessage, i, count)
 
 # Getting ... utilities
-def printGettingAllAccountEntities(entityType, query=''):
+def printGettingAllAccountEntities(entityType, query='', qualifier=''):
   if GC.Values[GC.SHOW_GETTINGS]:
     if query:
       Ent.SetGettingQuery(entityType, query)
+    elif qualifier:
+      Ent.SetGettingQualifier(entityType, qualifier)
     else:
       Ent.SetGetting(entityType)
-    writeStderr(convertUTF8toSys('{0} {1}{2}{3}\n'.format(Msg.GETTING_ALL, Ent.PluralGetting(), Ent.GettingPreQualifier(), Ent.MayTakeTime(Ent.ACCOUNT))))
+    writeStderr(convertUTF8toSys('{0} {1}{2}{3}\n'.format(Msg.GETTING_ALL, Ent.PluralGetting(),
+                                                          Ent.GettingPreQualifier(), Ent.MayTakeTime(Ent.ACCOUNT))))
 
 def printGotAccountEntities(count):
   if GC.Values[GC.SHOW_GETTINGS]:
@@ -1881,11 +1884,14 @@ def printGettingAllEntityItemsForWhom(entityItem, forWhom, i=0, count=0, query='
     else:
       Ent.SetGetting(entityItem)
     Ent.SetGettingForWhom(forWhom)
-    writeStderr(convertUTF8toSys('{0} {1}{2} {3} {4}{5}{6}'.format(Msg.GETTING_ALL, Ent.PluralGetting(), Ent.GettingPreQualifier(), Msg.FOR, forWhom, Ent.MayTakeTime(entityType), currentCountNL(i, count))))
+    writeStderr(convertUTF8toSys('{0} {1}{2} {3} {4}{5}{6}'.format(Msg.GETTING_ALL, Ent.PluralGetting(),
+                                                                   Ent.GettingPreQualifier(), Msg.FOR, forWhom, Ent.MayTakeTime(entityType),
+                                                                   currentCountNL(i, count))))
 
 def printGotEntityItemsForWhom(count):
   if GC.Values[GC.SHOW_GETTINGS]:
-    writeStderr(convertUTF8toSys('{0} {1} {2}{3} {4} {5}\n'.format(Msg.GOT, count, Ent.ChooseGetting(count), Ent.GettingPostQualifier(), Msg.FOR, Ent.GettingForWhom())))
+    writeStderr(convertUTF8toSys('{0} {1} {2}{3} {4} {5}\n'.format(Msg.GOT, count, Ent.ChooseGetting(count),
+                                                                   Ent.GettingPostQualifier(), Msg.FOR, Ent.GettingForWhom())))
 
 def printGettingEntityItem(entityType, entityItem, i=0, count=0):
   if GC.Values[GC.SHOW_GETTINGS]:
@@ -1921,7 +1927,8 @@ def getPageMessageForWhom(forWhom=None, showTotal=True, showFirstLastItems=False
   Ent.SetGettingShowTotal(showTotal)
   if forWhom:
     Ent.SetGettingForWhom(forWhom)
-  pageMessage = '{0} {1} {{0}} {2} {3}'.format(Msg.GOT, [NUM_ITEMS_MARKER, TOTAL_ITEMS_MARKER][showTotal], Msg.FOR, Ent.GettingForWhom())
+  pageMessage = '{0} {1} {{0}}{2} {3} {4}'.format(Msg.GOT, [NUM_ITEMS_MARKER, TOTAL_ITEMS_MARKER][showTotal],
+                                                  Ent.GettingPostQualifier(), Msg.FOR, Ent.GettingForWhom())
   if showFirstLastItems:
     pageMessage += ': {0} - {1}'.format(FIRST_ITEM_MARKER, LAST_ITEM_MARKER)
   else:
@@ -6366,7 +6373,7 @@ def _getValidateLoginHint(login_hint):
     if not login_hint:
       login_hint = readStdin('\nWhat is your G Suite admin email address? ').strip()
     if login_hint.find('@') == -1 and GC.Values[GC.DOMAIN]:
-      login_hint = '{0}@{1}'.format(login_hint, GC.Values[GC.DOMAIN].lower())
+      login_hint = '{0}@{1}'.format(login_hint, GC.Values[GC.DOMAIN])
     if VALIDEMAIL_PATTERN.match(login_hint):
       return login_hint
     sys.stdout.write('{0}Invalid email address: {1}\n'.format(ERROR_PREFIX, login_hint))
@@ -6490,7 +6497,7 @@ class cmd_flags(object):
     self.auth_host_port = [8080, 9090]
 
 def setGAMOauthURLfile(access_type):
-  if GM.Globals[GM.WINDOWS] and access_type == 'offline' and GC.Values[GC.NO_BROWSER]:
+  if access_type == 'offline' and GC.Values[GC.NO_BROWSER]:
     GM.Globals[GM.GAM_OAUTH_URL_TXT] = os.path.join(GM.Globals[GM.GAM_PATH], FN_GAM_OAUTH_URL_TXT)
   else:
     GM.Globals[GM.GAM_OAUTH_URL_TXT] = None
@@ -6891,10 +6898,12 @@ def _createClientSecretsOauth2service(httpObj, projectId):
 {0}
 
 1. Click the blue "Create credentials" button. Choose "OAuth client ID".
-2. Click the blue "Configure consent screen" button. Enter "GAM" for "Application name".
-3. Leave other fields blank. Click "Save" button.
-3. Choose "Other". Enter a desired value for "Name". Click the blue "Create" button.
-4. Copy your "client ID" value.
+2. Click the blue "Configure consent screen" button.
+3. Select "Internal" under "Application type".
+4. Enter "GAM" for "Application name".
+5. Leave other fields blank. Click "Save" button.
+6. Choose "Other". Enter "GAM" for "Name". Click the blue "Create" button.
+7. Copy your "client ID" value.
 
 \n'''.format(console_credentials_url))
     client_id = readStdin('Enter your Client ID: ').strip()
@@ -20108,10 +20117,13 @@ def doInfoVaultExport():
   except (GAPI.notFound, GAPI.badRequest, GAPI.forbidden) as e:
     entityActionFailedWarning([Ent.VAULT_MATTER, matterNameId, Ent.VAULT_EXPORT, exportNameId], str(e))
 
+VAULT_EXPORT_STATUS_MAP = {'completed': 'COMPLETED', 'failed': 'FAILED', 'inprogress': 'IN_PROGRESS'}
 PRINT_VAULT_EXPORTS_TITLES = ['matterId', 'matterName', 'id', 'name', 'createTime', 'status']
 
 # gam print vaultexports|exports [todrive <ToDriveAttributes>*] [matters <MatterItemList>] [shownames]
-# gam show vaultexports|exports [matters <MatterItemList>] [shownames]
+#	[matters <MatterItemList>] [exportstatus <ExportStatusList>] [shownames]
+# gam show vaultexports|exports
+#	[matters <MatterItemList>] [exportstatus <ExportStatusList>] [shownames]
 def doPrintShowVaultExports():
   v = buildGAPIObject(API.VAULT)
   csvFormat = Act.csvFormat()
@@ -20119,6 +20131,7 @@ def doPrintShowVaultExports():
     titles, csvRows = initializeTitlesCSVfile(PRINT_VAULT_EXPORTS_TITLES)
     todrive = {}
   matters = []
+  exportStatusList = []
   cd = None
   while Cmd.ArgumentsRemaining():
     myarg = getArgument()
@@ -20126,17 +20139,25 @@ def doPrintShowVaultExports():
       todrive = getTodriveParameters()
     elif myarg in ['matter', 'matters']:
       matters = shlexSplitList(getString(Cmd.OB_MATTER_ITEM_LIST))
+    elif myarg == 'exportstatus':
+      for state in getString(Cmd.OB_STATE_NAME_LIST).lower().replace('_', '').replace(',', ' ').split():
+        if state in VAULT_EXPORT_STATUS_MAP:
+          exportStatusList.append(VAULT_EXPORT_STATUS_MAP[state])
+        else:
+          invalidChoiceExit(list(VAULT_EXPORT_STATUS_MAP), True)
     elif myarg == 'shownames':
       cd = buildGAPIObject(API.DIRECTORY)
     else:
       unknownArgumentExit()
+  exportStatuses = set(exportStatusList)
+  exportQualifier = ' ({0})'.format(','.join(exportStatusList)) if exportStatusList else ''
   if not matters:
-    printGettingAllAccountEntities(Ent.VAULT_MATTER)
+    printGettingAllAccountEntities(Ent.VAULT_MATTER, qualifier=' (OPEN)')
     try:
       results = callGAPIpages(v.matters(), 'list', 'matters',
                               page_message=getPageMessage(),
                               throw_reasons=[GAPI.FORBIDDEN],
-                              view='BASIC', fields='matters(matterId,name,state),nextPageToken')
+                              view='BASIC', state='OPEN', fields='matters(matterId,name,state),nextPageToken')
     except GAPI.forbidden as e:
       entityActionFailedWarning([Ent.VAULT_EXPORT, None], str(e))
       return
@@ -20156,7 +20177,8 @@ def doPrintShowVaultExports():
     matterName = matter['name']
     matterNameId = formatVaultNameId(matterName, matterId)
     if csvFormat:
-      printGettingAllEntityItemsForWhom(Ent.VAULT_EXPORT, '{0}: {1}'.format(Ent.Singular(Ent.VAULT_MATTER), matterNameId), j, jcount)
+      printGettingAllEntityItemsForWhom(Ent.VAULT_EXPORT, '{0}: {1}'.format(Ent.Singular(Ent.VAULT_MATTER), matterNameId),
+                                        j, jcount, qualifier=exportQualifier)
       page_message = getPageMessageForWhom()
     else:
       page_message = None
@@ -20182,14 +20204,16 @@ def doPrintShowVaultExports():
       k = 0
       for export in exports:
         k += 1
-        printEntity([Ent.VAULT_MATTER, matterNameId, Ent.VAULT_EXPORT, formatVaultNameId(export['name'], export['id'])], k, kcount)
-        _showVaultExport(export, cd)
+        if not exportStatuses or export['status'] in exportStatuses:
+          printEntity([Ent.VAULT_MATTER, matterNameId, Ent.VAULT_EXPORT, formatVaultNameId(export['name'], export['id'])], k, kcount)
+          _showVaultExport(export, cd)
       Ind.Decrement()
     else:
       for export in exports:
-        if cd is not None:
-          _getExportOrgUnitName(export, cd)
-        addRowTitlesToCSVfile(flattenJSON(export, flattened={'matterId': matterId, 'matterName': matterName}, timeObjects=VAULT_EXPORT_TIME_OBJECTS), csvRows, titles)
+        if not exportStatuses or export['status'] in exportStatuses:
+          if cd is not None:
+            _getExportOrgUnitName(export, cd)
+          addRowTitlesToCSVfile(flattenJSON(export, flattened={'matterId': matterId, 'matterName': matterName}, timeObjects=VAULT_EXPORT_TIME_OBJECTS), csvRows, titles)
   if csvFormat:
     writeCSVfile(csvRows, titles, 'Vault Exports', todrive, PRINT_VAULT_EXPORTS_TITLES)
 
@@ -20632,12 +20656,12 @@ def doPrintShowVaultHolds():
     else:
       unknownArgumentExit()
   if not matters:
-    printGettingAllAccountEntities(Ent.VAULT_MATTER)
+    printGettingAllAccountEntities(Ent.VAULT_MATTER, qualifier=' (OPEN)')
     try:
       results = callGAPIpages(v.matters(), 'list', 'matters',
                               page_message=getPageMessage(),
                               throw_reasons=[GAPI.FORBIDDEN],
-                              view='BASIC', fields='matters(matterId,name,state),nextPageToken')
+                              view='BASIC', state='OPEN', fields='matters(matterId,name,state),nextPageToken')
     except GAPI.forbidden as e:
       entityActionFailedWarning([Ent.VAULT_HOLD, None], str(e))
       return
@@ -20903,10 +20927,11 @@ def doInfoVaultMatter():
   except (GAPI.notFound, GAPI.forbidden) as e:
     entityActionFailedWarning([Ent.VAULT_MATTER, matterNameId], str(e))
 
+VAULT_MATTER_STATE_MAP = {'open': 'OPEN', 'closed': 'CLOSED', 'deleted': 'DELETED'}
 PRINT_VAULT_MATTERS_TITLES = ['matterId', 'name', 'description', 'state']
 
-# gam print vaultmatters|matters [todrive <ToDriveAttributes>*] [basic|full]
-# gam show vaultmatters|matters [basic|full]
+# gam print vaultmatters|matters [todrive <ToDriveAttributes>*] [basic|full] [matterstate <MatterStateList>]
+# gam show vaultmatters|matters [basic|full] [matterstate <MatterStateList>]
 def doPrintShowVaultMatters():
   v = buildGAPIObject(API.VAULT)
   csvFormat = Act.csvFormat()
@@ -20914,20 +20939,38 @@ def doPrintShowVaultMatters():
     titles, csvRows = initializeTitlesCSVfile(PRINT_VAULT_MATTERS_TITLES)
     todrive = {}
   view = 'FULL'
+  matterStatesList = []
   while Cmd.ArgumentsRemaining():
     myarg = getArgument()
     if csvFormat and myarg == 'todrive':
       todrive = getTodriveParameters()
     elif myarg in PROJECTION_CHOICE_MAP:
       view = PROJECTION_CHOICE_MAP[myarg]
+    elif myarg == 'matterstate':
+      for state in getString(Cmd.OB_STATE_NAME_LIST).lower().replace('_', '').replace(',', ' ').split():
+        if state in VAULT_MATTER_STATE_MAP:
+          matterStatesList.append(VAULT_MATTER_STATE_MAP[state])
+        else:
+          invalidChoiceExit(list(VAULT_MATTER_STATE_MAP), True)
     else:
       unknownArgumentExit()
-  printGettingAllAccountEntities(Ent.VAULT_MATTER)
+  # If no states are set, there is no filtering; if 1 state is set, the API can filter; else GAM filters
+  matterStates = set()
+  stateParm = None
+  if matterStatesList:
+    if len(matterStatesList) == 1:
+      stateParm = matterStatesList[0]
+    else:
+      matterStates = set(matterStatesList)
+    qualifier = ' ({0})'.format(','.join(matterStatesList))
+  else:
+    qualifier = ''
+  printGettingAllAccountEntities(Ent.VAULT_MATTER, qualifier=qualifier)
   try:
     matters = callGAPIpages(v.matters(), 'list', 'matters',
                             page_message=getPageMessage(),
                             throw_reasons=[GAPI.FORBIDDEN],
-                            view=view)
+                            view=view, state=stateParm)
   except GAPI.forbidden as e:
     entityActionFailedWarning([Ent.VAULT_MATTER, None], str(e))
     return
@@ -20942,12 +20985,14 @@ def doPrintShowVaultMatters():
     j = 0
     for matter in matters:
       j += 1
-      printEntity([Ent.VAULT_MATTER, formatVaultNameId(matter['name'], matter['matterId'])], j, jcount)
-      _showVaultMatter(matter, cd)
+      if not matterStates or matter['state'] in matterStates:
+        printEntity([Ent.VAULT_MATTER, formatVaultNameId(matter['name'], matter['matterId'])], j, jcount)
+        _showVaultMatter(matter, cd)
     Ind.Decrement()
   else:
     for matter in matters:
-      addRowTitlesToCSVfile(flattenJSON(matter), csvRows, titles)
+      if not matterStates or matter['state'] in matterStates:
+        addRowTitlesToCSVfile(flattenJSON(matter), csvRows, titles)
   if csvFormat:
     writeCSVfile(csvRows, titles, 'Vault Matters', todrive, PRINT_VAULT_MATTERS_TITLES)
 
