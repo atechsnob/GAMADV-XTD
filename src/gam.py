@@ -22,7 +22,7 @@ For more information, see https://github.com/taers232c/GAMADV-XTD
 """
 
 __author__ = 'Ross Scroggs <ross.scroggs@gmail.com>'
-__version__ = '4.94.00'
+__version__ = '4.94.01'
 __license__ = 'Apache License 2.0 (http://www.apache.org/licenses/LICENSE-2.0)'
 
 import base64
@@ -6430,7 +6430,9 @@ Select the authorized scopes by entering a number.
 Append an 'r' to grant read-only access or an 'a' to grant action-only access.
 
 '''
-  for a_scope in API.OAUTH2_SCOPES:
+  scopesList = API.OAUTH2_SCOPES
+  numScopes = len(scopesList)
+  for a_scope in scopesList:
     oauth2_menu += '[%%%%s] %%2d)  %s' % (a_scope['name'])
     if a_scope['subscopes']:
       oauth2_menu += ' (supports %s)' % (' and '.join(a_scope['subscopes']))
@@ -6441,9 +6443,8 @@ Append an 'r' to grant read-only access or an 'a' to grant action-only access.
      e)  Exit without changes
      c)  Continue to authorization
 '''
-  num_scopes = len(API.OAUTH2_SCOPES)
-  menu = oauth2_menu % tuple(range(num_scopes))
-  selectedScopes = ['*'] * num_scopes
+  menu = oauth2_menu % tuple(range(numScopes))
+  selectedScopes = ['*'] * numScopes
   if currentScopes is None:
     credentials = getOauth2TxtCredentials(updateOnError=False)
     if credentials and not credentials.invalid:
@@ -6451,7 +6452,7 @@ Append an 'r' to grant read-only access or an 'a' to grant action-only access.
         currentScopes = sorted(credentials.scopes)
   if currentScopes:
     i = 0
-    for a_scope in API.OAUTH2_SCOPES:
+    for a_scope in scopesList:
       selectedScopes[i] = ' '
       possibleScope = a_scope['scope']
       for currentScope in currentScopes:
@@ -6469,10 +6470,10 @@ Append an 'r' to grant read-only access or an 'a' to grant action-only access.
       i += 1
   else:
     i = 0
-    for a_scope in API.OAUTH2_SCOPES:
+    for a_scope in scopesList:
       selectedScopes[i] = ' ' if a_scope.get('offByDefault', False) else '*'
       i += 1
-  prompt = 'Please enter 0-{0}[a|r] or {1}: '.format(num_scopes-1, '|'.join(OAUTH2_CMDS))
+  prompt = 'Please enter 0-{0}[a|r] or {1}: '.format(numScopes-1, '|'.join(OAUTH2_CMDS))
   while True:
     os.system(['clear', 'cls'][GM.Globals[GM.WINDOWS]])
     sys.stdout.write(menu % tuple(selectedScopes))
@@ -6490,13 +6491,13 @@ Append an 'r' to grant read-only access or an 'a' to grant action-only access.
           mode = ' '
         if selection and selection.isdigit():
           selection = int(selection)
-        if isinstance(selection, int) and selection < num_scopes:
+        if isinstance(selection, int) and selection < numScopes:
           if mode == 'R':
-            if 'readonly' not in API.OAUTH2_SCOPES[selection]['subscopes']:
+            if 'readonly' not in scopesList[selection]['subscopes']:
               sys.stdout.write('{0}Scope {1} does not support read-only mode!\n'.format(ERROR_PREFIX, selection))
               continue
           elif mode == 'A':
-            if 'action' not in API.OAUTH2_SCOPES[selection]['subscopes']:
+            if 'action' not in scopesList[selection]['subscopes']:
               sys.stdout.write('{0}Scope {1} does not support action-only mode!\n'.format(ERROR_PREFIX, selection))
               continue
           elif selectedScopes[selection] != '*':
@@ -6507,18 +6508,18 @@ Append an 'r' to grant read-only access or an 'a' to grant action-only access.
           break
         elif isinstance(selection, string_types) and selection in OAUTH2_CMDS:
           if selection == 's':
-            for i in range(num_scopes):
+            for i in range(numScopes):
               selectedScopes[i] = '*'
           elif selection == 'u':
-            for i in range(num_scopes):
+            for i in range(numScopes):
               selectedScopes[i] = ' '
           elif selection == 'e':
-            return None
+            return (scopesList, None)
           break
         sys.stdout.write('{0}Invalid input "{1}"\n'.format(ERROR_PREFIX, choice))
     if selection == 'c':
       break
-  return selectedScopes
+  return (scopesList, selectedScopes)
 
 class cmd_flags(object):
   def __init__(self, noLocalWebserver):
@@ -6578,14 +6579,14 @@ def doOAuthRequest(currentScopes=None):
   client_id, client_secret = getOAuthClientIDAndSecret()
   login_hint = getEmailAddress(noUid=True, optional=True)
   checkForExtraneousArguments()
-  selectedScopes = getScopesFromUser(currentScopes)
+  scopesList, selectedScopes = getScopesFromUser(currentScopes)
   if selectedScopes is None:
     return False
   login_hint = _getValidateLoginHint(login_hint)
   revokeCredentials()
   scopes = API.REQUIRED_SCOPES[:] # Email Display Scope, always included for client
   i = 0
-  for a_scope in API.OAUTH2_SCOPES:
+  for a_scope in scopesList:
     if selectedScopes[i] == '*':
       scopes.append(a_scope['scope'])
     elif selectedScopes[i] == 'R':
@@ -14624,7 +14625,7 @@ def _getMobileFieldsArguments(myarg, parameters):
 # gam info mobile|mobiles <MobileDeviceEntity>
 #	[basic|full|allfields] <MobileFieldName>* [fields <MobileFieldNameList>] [formatjson]
 def doInfoMobileDevices():
-  entityList, cd = getMobileDeviceEntity()
+  entityList, cd, _ = getMobileDeviceEntity()
   parameters = _initMobileFieldsParameters()
   FJQC = FormatJSONQuoteChar()
   while Cmd.ArgumentsRemaining():

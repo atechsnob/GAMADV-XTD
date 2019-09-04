@@ -1,3 +1,7 @@
+4.94.01
+
+Fixed bug in `gam info mobile` that caused a trap.
+
 4.94.00
 
 Following Jay's lead, added additional validation code to `gam check serviceaccount`.
