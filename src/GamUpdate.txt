@@ -1,3 +1,11 @@
+4.94.04
+
+Following Jay's lead, added additional platform information to `gam version`.
+
+4.94.03
+
+Skipped.
+
 4.94.02
 
 When `gam oauth create` is issued and `no_browser = true`, GAM indicates where the `gamoauthurl.txt` file is located
