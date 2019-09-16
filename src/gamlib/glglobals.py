@@ -75,6 +75,8 @@ GAM_CFG_FILE = 'gcfi'
 GAM_OAUTH_URL_TXT = 'gout'
 # Path to gam
 GAM_PATH = 'gpth'
+# Length of last Got message
+LAST_GOT_MSG_LEN = 'lgml'
 # File containing time of last GAM update check
 LAST_UPDATE_CHECK_TXT = 'lupc'
 # Make Building ID/Name map
@@ -175,6 +177,7 @@ Globals = {
   GAM_CFG_FILE: '',
   GAM_OAUTH_URL_TXT: None,
   GAM_PATH: '.',
+  LAST_GOT_MSG_LEN: 0,
   LAST_UPDATE_CHECK_TXT: '',
   MAKE_BUILDING_ID_NAME_MAP: True,
   MAP_BUILDING_ID_TO_NAME: {},

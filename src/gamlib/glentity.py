@@ -31,6 +31,11 @@ class GamEntity(object):
   ROLE_MEMBER_OWNER = ','.join([ROLE_MEMBER, ROLE_OWNER])
   ROLE_MANAGER_MEMBER_OWNER = ','.join([ROLE_MANAGER, ROLE_MEMBER, ROLE_OWNER])
 
+  TYPE_CUSTOMER = 'CUSTOMER'
+  TYPE_EXTERNAL = 'EXTERNAL'
+  TYPE_GROUP = 'GROUP'
+  TYPE_USER = 'USER'
+
 # Keys into NAMES; arbitrary values but must be unique
   ACCESS_TOKEN = 'atok'
   ACCOUNT = 'acct'
@@ -451,7 +456,6 @@ class GamEntity(object):
     self.forWhom = None
     self.preQualifier = ''
     self.postQualifier = ''
-    self.showTotal = False
 
   def SetGetting(self, entityType):
     self.entityType = entityType
@@ -480,12 +484,6 @@ class GamEntity(object):
 
   def GettingForWhom(self):
     return self.forWhom
-
-  def SetGettingShowTotal(self, showTotal):
-    self.showTotal = showTotal
-
-  def GettingShowTotal(self):
-    return self.showTotal
 
   def Choose(self, entityType, count):
     return self._NAMES[entityType][[0, 1][count == 1]]

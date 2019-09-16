@@ -22,7 +22,7 @@ For more information, see https://github.com/taers232c/GAMADV-XTD
 """
 
 __author__ = 'Ross Scroggs <ross.scroggs@gmail.com>'
-__version__ = '4.94.04'
+__version__ = '4.94.10'
 __license__ = 'Apache License 2.0 (http://www.apache.org/licenses/LICENSE-2.0)'
 
 import base64
@@ -1909,29 +1909,28 @@ def printGettingEntityItemForWhom(entityItem, forWhom, i=0, count=0):
 
 FIRST_ITEM_MARKER = '%%first_item%%'
 LAST_ITEM_MARKER = '%%last_item%%'
-NUM_ITEMS_MARKER = '%%num_items%%'
 TOTAL_ITEMS_MARKER = '%%total_items%%'
 
-def getPageMessage(showTotal=True, showFirstLastItems=False):
+def getPageMessage(showFirstLastItems=False):
   if not GC.Values[GC.SHOW_GETTINGS]:
     return None
-  Ent.SetGettingShowTotal(showTotal)
-  pageMessage = '{0} {1} {{0}}'.format(Msg.GOT, [NUM_ITEMS_MARKER, TOTAL_ITEMS_MARKER][showTotal])
+  pageMessage = '{0} {1} {{0}}'.format(Msg.GOT, TOTAL_ITEMS_MARKER)
   if showFirstLastItems:
     pageMessage += ': {0} - {1}'.format(FIRST_ITEM_MARKER, LAST_ITEM_MARKER)
   else:
     pageMessage += '...'
   if GC.Values[GC.SHOW_GETTINGS_GOT_NL]:
     pageMessage += '\n'
+  else:
+    GM.Globals[GM.LAST_GOT_MSG_LEN] = 0
   return pageMessage
 
-def getPageMessageForWhom(forWhom=None, showTotal=True, showFirstLastItems=False):
+def getPageMessageForWhom(forWhom=None, showFirstLastItems=False):
   if not GC.Values[GC.SHOW_GETTINGS]:
     return None
-  Ent.SetGettingShowTotal(showTotal)
   if forWhom:
     Ent.SetGettingForWhom(forWhom)
-  pageMessage = '{0} {1} {{0}}{2} {3} {4}'.format(Msg.GOT, [NUM_ITEMS_MARKER, TOTAL_ITEMS_MARKER][showTotal],
+  pageMessage = '{0} {1} {{0}}{2} {3} {4}'.format(Msg.GOT, TOTAL_ITEMS_MARKER,
                                                   Ent.GettingPostQualifier(), Msg.FOR, Ent.GettingForWhom())
   if showFirstLastItems:
     pageMessage += ': {0} - {1}'.format(FIRST_ITEM_MARKER, LAST_ITEM_MARKER)
@@ -1939,6 +1938,8 @@ def getPageMessageForWhom(forWhom=None, showTotal=True, showFirstLastItems=False
     pageMessage += '...'
   if GC.Values[GC.SHOW_GETTINGS_GOT_NL]:
     pageMessage += '\n'
+  else:
+    GM.Globals[GM.LAST_GOT_MSG_LEN] = 0
   return pageMessage
 
 def printLine(message):
@@ -2229,7 +2230,9 @@ class UnicodeDictReader(object):
           self.fieldnames[0] = self.fieldnames[0].replace(codecs.BOM_UTF8, '', 1)
       else:
         self.fieldnames = fieldnames
-    except (csv.Error, StopIteration):
+    except csv.Error as e:
+      systemErrorExit(FILE_ERROR_RC, e)
+    except StopIteration:
       self.fieldnames = []
     except LookupError as e:
       Cmd.Backup()
@@ -3383,6 +3386,19 @@ def callGData(service, function,
     except IOError as e:
       systemErrorExit(FILE_ERROR_RC, str(e))
 
+def writeGotMessage(msg):
+  writeStderr('\r')
+  flushStderr()
+  if GC.Values[GC.SHOW_GETTINGS_GOT_NL]:
+    writeStderr(msg)
+  else:
+    msgLen = len(msg)
+    if msgLen < GM.Globals[GM.LAST_GOT_MSG_LEN]:
+      writeStderr(msg+' '*(GM.Globals[GM.LAST_GOT_MSG_LEN]-msgLen))
+    else:
+      writeStderr(msg)
+    GM.Globals[GM.LAST_GOT_MSG_LEN] = msgLen
+
 def callGDataPages(service, function,
                    page_message=None,
                    soft_errors=False, throw_errors=None, retry_errors=None,
@@ -3411,15 +3427,8 @@ def callGDataPages(service, function,
       nextLink = None
       pageItems = 0
     if page_message:
-      if Ent.GettingShowTotal():
-        show_message = page_message.replace(TOTAL_ITEMS_MARKER, str(totalItems))
-        count = totalItems
-      else:
-        show_message = page_message.replace(NUM_ITEMS_MARKER, str(pageItems))
-        count = pageItems if nextLink else totalItems
-      writeStderr('\r')
-      flushStderr()
-      writeStderr(show_message.format(Ent.ChooseGetting(count)))
+      show_message = page_message.replace(TOTAL_ITEMS_MARKER, str(totalItems))
+      writeGotMessage(show_message.format(Ent.ChooseGetting(totalItems)))
     if nextLink is None:
       if page_message and (page_message[-1] != '\n'):
         writeStderr('\r\n')
@@ -3606,12 +3615,7 @@ def _processGAPIpagesResult(results, items, allResults, totalItems, page_message
     results = {items: []}
     pageItems = 0
   if page_message:
-    if Ent.GettingShowTotal():
-      show_message = page_message.replace(TOTAL_ITEMS_MARKER, str(totalItems))
-      count = totalItems
-    else:
-      show_message = page_message.replace(NUM_ITEMS_MARKER, str(pageItems))
-      count = pageItems if pageToken else totalItems
+    show_message = page_message.replace(TOTAL_ITEMS_MARKER, str(totalItems))
     if message_attribute:
       try:
         show_message = show_message.replace(FIRST_ITEM_MARKER, str(results[items][0][message_attribute]))
@@ -3619,9 +3623,7 @@ def _processGAPIpagesResult(results, items, allResults, totalItems, page_message
       except (IndexError, KeyError):
         show_message = show_message.replace(FIRST_ITEM_MARKER, '')
         show_message = show_message.replace(LAST_ITEM_MARKER, '')
-    writeStderr('\r')
-    flushStderr()
-    writeStderr(show_message.format(Ent.Choose(entityType, count)))
+    writeGotMessage(show_message.format(Ent.Choose(entityType, totalItems)))
   return (pageToken, totalItems)
 
 def _finalizeGAPIpagesResult(page_message):
@@ -4103,6 +4105,7 @@ GROUP_ROLES_MAP = {
   'member': Ent.ROLE_MEMBER,
   'members': Ent.ROLE_MEMBER,
   }
+ALL_GROUP_ROLES = set([Ent.ROLE_MANAGER, Ent.ROLE_MEMBER, Ent.ROLE_OWNER])
 
 def _getRoleVerification(memberRoles, fields):
   if memberRoles and memberRoles.find(Ent.ROLE_MEMBER) != -1:
@@ -4119,7 +4122,7 @@ def _checkMemberRoleIsSuspended(member, validRoles, isSuspended):
           (isSuspended is None or (not isSuspended and memberStatus != 'SUSPENDED') or (isSuspended and memberStatus == 'SUSPENDED')))
 
 # Turn the entity into a list of Users/CrOS devices
-def getUsersToModify(entityType, entity, memberRoles=None, isSuspended=None, groupMemberType='USER'):
+def getUsersToModify(entityType, entity, memberRoles=None, isSuspended=None, groupMemberType=Ent.TYPE_USER):
   def _incrEntityDoesNotExist(entityType):
     entityError['entityType'] = entityType
     entityError['doesNotExist'] += 1
@@ -4142,7 +4145,7 @@ def getUsersToModify(entityType, entity, memberRoles=None, isSuspended=None, gro
       _incrEntityDoesNotExist(Ent.GROUP)
       return
     for member in result:
-      if member['type'] == 'USER':
+      if member['type'] == Ent.TYPE_USER:
         email = member['email'].lower()
         if email in entitySet:
           continue
@@ -4153,7 +4156,7 @@ def getUsersToModify(entityType, entity, memberRoles=None, isSuspended=None, gro
               continue
           entitySet.add(email)
           entityList.append(email)
-      elif recursive and member['type'] == 'GROUP':
+      elif recursive and member['type'] == Ent.TYPE_GROUP:
         _addGroupUsersToUsers(member['email'], domains, recursive)
 
   entityError = {'entityType': None, 'doesNotExist': 0, 'invalid': 0}
@@ -4233,7 +4236,7 @@ def getUsersToModify(entityType, entity, memberRoles=None, isSuspended=None, gro
           _incrEntityDoesNotExist(Ent.GROUP)
           continue
         for member in result:
-          email = member['email'].lower() if member['type'] != 'CUSTOMER' else member['id']
+          email = member['email'].lower() if member['type'] != Ent.TYPE_CUSTOMER else member['id']
           if ((groupMemberType in ('ALL', member['type'])) and
               _checkMemberRoleIsSuspended(member, validRoles, isSuspended) and email not in entitySet):
             entitySet.add(email)
@@ -4731,7 +4734,7 @@ def getEntityArgument(entityList):
   return (0, len(entityList), entityList)
 
 def getEntityToModify(defaultEntityType=None, crosAllowed=False, userAllowed=True,
-                      typeMap=None, isSuspended=None, groupMemberType='USER', delayGet=False):
+                      typeMap=None, isSuspended=None, groupMemberType=Ent.TYPE_USER, delayGet=False):
   if GC.Values[GC.USER_SERVICE_ACCOUNT_ACCESS_ONLY]:
     crosAllowed = False
     selectorChoices = Cmd.SERVICE_ACCOUNT_ONLY_ENTITY_SELECTORS[:]
@@ -7785,11 +7788,11 @@ def doReport():
       orgUnitId = None
     elif userKey == 'all':
       printGettingEntityItemForWhom(Ent.REPORT, 'users in orgUnit {0}'.format(orgUnit) if orgUnit else 'all users')
-      page_message = getPageMessage(showTotal=False)
+      page_message = getPageMessage()
       users = ['all']
     else:
       Ent.SetGetting(Ent.USER)
-      page_message = getPageMessage(showTotal=False)
+      page_message = getPageMessage()
       users = [normalizeEmailAddressOrUID(userKey)]
       orgUnitId = None
     if not aggregateUserUsage:
@@ -7926,11 +7929,11 @@ def doReport():
       orgUnitId = None
     elif userKey == 'all':
       printGettingEntityItemForWhom(Ent.ACTIVITY, 'users in orgUnit {0}'.format(orgUnit) if orgUnit else 'all users')
-      page_message = getPageMessage(showTotal=False)
+      page_message = getPageMessage()
       users = ['all']
     else:
       Ent.SetGetting(Ent.ACTIVITY)
-      page_message = getPageMessage(showTotal=False)
+      page_message = getPageMessage()
       users = [normalizeEmailAddressOrUID(userKey)]
       orgUnitId = None
     if not eventNames:
@@ -8410,7 +8413,8 @@ def sendCreateUpdateUserNotification(body, notify, tagReplacements, i=0, count=0
     _getTagReplacementFieldValues(body['primaryEmail'], i, count, tagReplacements, body if createMessage else None)
   notify['subject'] = _processTagReplacements(tagReplacements, notify['subject'])
   notify['message'] = _processTagReplacements(tagReplacements, notify['message'])
-  send_email(notify['subject'], notify['message'], notify['emailAddress'], i, count, msgFrom=msgFrom, html=notify['html'], charset=notify['charset'])
+  send_email(notify['subject'], notify['message'], notify['emailAddress'], i, count,
+             msgFrom=msgFrom, html=notify['html'], charset=notify['charset'])
 
 # gam sendemail <EmailAddressEntity> [from <UserItem>] [replyto <EmailAddress>]
 #	[cc <EmailAddressEntity>] [bcc <EmailAddressEntity>] [singlemessage [<Boolean>]]
@@ -8503,16 +8507,18 @@ def doSendEmail(users=None):
     if singleMessage:
       entityPerformActionModifierNumItems([Ent.USER, msgFrom],
                                           Act.MODIFIER_TO, jcount+len(ccRecipients)+len(bccRecipients), Ent.RECIPIENT, i, count)
-      send_email(notify['subject'], notify['message'], ','.join(recipients), i, count, msgFrom, msgReplyTo,
-                 notify['html'], notify['charset'], attachments, ','.join(ccRecipients), ','.join(bccRecipients))
+      send_email(notify['subject'], notify['message'], ','.join(recipients), i, count,
+                 msgFrom=msgFrom, msgReplyTo=msgReplyTo, html=notify['html'], charset=notify['charset'],
+                 attachments=attachments, ccRecipients=','.join(ccRecipients), bccRecipients=','.join(bccRecipients))
     else:
       entityPerformActionModifierNumItems([Ent.USER, msgFrom], Act.MODIFIER_TO, jcount, Ent.RECIPIENT, i, count)
       Ind.Increment()
       j = 0
       for recipient in recipients:
         j += 1
-        send_email(notify['subject'], notify['message'], recipient, j, jcount, msgFrom, msgReplyTo,
-                   notify['html'], notify['charset'], attachments)
+        send_email(notify['subject'], notify['message'], recipient, j, jcount,
+                   msgFrom=msgFrom, msgReplyTo=msgReplyTo, html=notify['html'], charset=notify['charset'],
+                   attachments=attachments)
       Ind.Decrement()
 
 ADDRESS_FIELDS_PRINT_ORDER = ['contactName', 'organizationName', 'addressLine1', 'addressLine2', 'addressLine3', 'locality', 'region', 'postalCode', 'countryCode']
@@ -15148,7 +15154,7 @@ def doUpdateGroups():
 
   def _getRoleGroupMemberType(defaultRole=Ent.ROLE_MEMBER):
     role = getChoice(GROUP_ROLES_MAP, defaultChoice=defaultRole, mapChoice=True)
-    groupMemberType = getChoice({'usersonly': 'USER', 'groupsonly': 'GROUP'}, defaultChoice='ALL', mapChoice=True)
+    groupMemberType = getChoice({'usersonly': Ent.TYPE_USER, 'groupsonly': Ent.TYPE_GROUP}, defaultChoice='ALL', mapChoice=True)
     return (role, groupMemberType)
 
   def getDeliverySettings():
@@ -16116,7 +16122,7 @@ def doPrintGroups():
     i = int(ri[RI_I])
     totalItems = 0
     items = 'members'
-    page_message = getPageMessageForWhom(forWhom=ri[RI_ENTITY], showTotal=False, showFirstLastItems=True)
+    page_message = getPageMessageForWhom(forWhom=ri[RI_ENTITY], showFirstLastItems=True)
     if exception is not None:
       http_status, reason, message = checkGAPIError(exception)
       if reason not in GAPI.DEFAULT_RETRY_REASONS+GAPI.MEMBERS_RETRY_REASONS:
@@ -16526,15 +16532,16 @@ def getGroupMembers(cd, groupEmail, memberRoles, membersList, membersSet, i, cou
   elif memberOptions[MEMBEROPTION_NODUPLICATES]:
     groupMemberList = []
     for member in groupMembers:
-      if member['type'] == 'USER':
-        if _checkMemberRoleIsSuspended(member, validRoles, memberOptions[MEMBEROPTION_ISSUSPENDED]) and member['id'] not in membersSet:
+      if member['type'] == Ent.TYPE_USER:
+        if (_checkMemberRoleIsSuspended(member, validRoles, memberOptions[MEMBEROPTION_ISSUSPENDED]) and
+            member['id'] not in membersSet):
           if memberOptions[MEMBEROPTION_GETDELIVERYSETTINGS]:
             _getDeliverySettings(member)
           membersSet.add(member['id'])
           member['level'] = level
           member['subgroup'] = groupEmail
           membersList.append(member)
-      elif member['type'] == 'GROUP':
+      elif member['type'] == Ent.TYPE_GROUP:
         if member['id'] not in membersSet:
           if memberOptions[MEMBEROPTION_GETDELIVERYSETTINGS]:
             _getDeliverySettings(member)
@@ -16544,14 +16551,14 @@ def getGroupMembers(cd, groupEmail, memberRoles, membersList, membersSet, i, cou
       getGroupMembers(cd, member, memberRoles, membersList, membersSet, i, count, memberOptions, level+1)
   else:
     for member in groupMembers:
-      if member['type'] == 'USER':
+      if member['type'] == Ent.TYPE_USER:
         if _checkMemberRoleIsSuspended(member, validRoles, memberOptions[MEMBEROPTION_ISSUSPENDED]):
           if memberOptions[MEMBEROPTION_GETDELIVERYSETTINGS]:
             _getDeliverySettings(member)
           member['level'] = level
           member['subgroup'] = groupEmail
           membersList.append(member)
-      elif member['type'] == 'GROUP':
+      elif member['type'] == Ent.TYPE_GROUP:
         getGroupMembers(cd, member['email'], memberRoles, membersList, membersSet, i, count, memberOptions, level+1)
 
 GROUPMEMBERS_FIELDS_CHOICE_MAP = {
@@ -16740,7 +16747,7 @@ def doPrintGroupMembers():
         if memberOptions[MEMBEROPTION_MEMBERNAMES]:
           row['name'] = 'Unknown'
         memberType = member.get('type')
-        if memberType == 'USER':
+        if memberType == Ent.TYPE_USER:
           try:
             mbinfo = callGAPI(cd.users(), 'get',
                               throw_reasons=GAPI.USER_GET_THROW_REASONS,
@@ -16759,7 +16766,7 @@ def doPrintGroupMembers():
                 row['name'] = peopleNames[memberId]
           except (GAPI.domainNotFound, GAPI.domainCannotUseApis, GAPI.forbidden, GAPI.badRequest, GAPI.backendError, GAPI.systemError):
             pass
-        elif memberType == 'GROUP':
+        elif memberType == Ent.TYPE_GROUP:
           if memberOptions[MEMBEROPTION_MEMBERNAMES]:
             try:
               row['name'] = callGAPI(cd.groups(), 'get',
@@ -16767,7 +16774,7 @@ def doPrintGroupMembers():
                                      groupKey=memberId, fields='name')['name']
             except (GAPI.groupNotFound, GAPI.domainNotFound, GAPI.domainCannotUseApis, GAPI.forbidden, GAPI.badRequest, GAPI.invalid, GAPI.systemError):
               pass
-        elif memberType == 'CUSTOMER':
+        elif memberType == Ent.TYPE_CUSTOMER:
           if memberOptions[MEMBEROPTION_MEMBERNAMES]:
             try:
               row['name'] = callGAPI(cd.customers(), 'get',
@@ -16792,7 +16799,7 @@ def doShowGroupMembers():
     return {Ent.ROLE_OWNER: 0, Ent.ROLE_MANAGER: 1, Ent.ROLE_MEMBER: 2}.get(key, 3)
 
   def _typeOrder(key):
-    return {'CUSTOMER': 0, 'USER': 1, 'GROUP': 2, 'EXTERNAL': 3}.get(key, 4)
+    return {Ent.TYPE_CUSTOMER: 0, Ent.TYPE_USER: 1, Ent.TYPE_GROUP: 2, Ent.TYPE_EXTERNAL: 3}.get(key, 4)
 
   def _statusOrder(key):
     return {'ACTIVE': 0, 'SUSPENDED': 1, 'UNKNOWN': 2}.get(key, 3)
@@ -16813,9 +16820,9 @@ def doShowGroupMembers():
     Ind.Increment()
     for member in sorted(membersList, key=lambda k: (_roleOrder(k.get('role', Ent.ROLE_MEMBER)), _typeOrder(k['type']), _statusOrder(k.get('status', '')))):
       if _checkMemberIsSuspended(member, memberOptions[MEMBEROPTION_ISSUSPENDED]):
-        if (member.get('role', Ent.ROLE_MEMBER) in rolesSet) or (member['type'] == 'GROUP'):
+        if (member.get('role', Ent.ROLE_MEMBER) in rolesSet) or (member['type'] == Ent.TYPE_GROUP):
           printKeyValueList(['{0}, {1}, {2}, {3}'.format(member.get('role', Ent.ROLE_MEMBER), member['type'], member.get('email', member['id']), member.get('status', ''))])
-        if (member['type'] == 'GROUP') and (maxdepth == -1 or depth < maxdepth):
+        if (member['type'] == Ent.TYPE_GROUP) and (maxdepth == -1 or depth < maxdepth):
           _showGroup(member['email'], depth+1)
     Ind.Decrement()
 
@@ -16859,7 +16866,7 @@ def doShowGroupMembers():
     else:
       unknownArgumentExit()
   if not rolesSet:
-    rolesSet = set([Ent.ROLE_MANAGER, Ent.ROLE_MEMBER, Ent.ROLE_OWNER])
+    rolesSet = ALL_GROUP_ROLES
   if entityList is None:
     updateFieldsForGroupMatchPatterns(matchPatterns, cdfieldsList)
     printGettingAllAccountEntities(Ent.GROUP, groupFilters(kwargs))
@@ -22201,8 +22208,12 @@ def getUserAttributes(cd, updateCmd, noUid=False):
       elif up == 'hashFunction':
         body[up] = HASH_FUNCTION_MAP[myarg]
         need_to_hash_password = False
-      elif up == 'primaryEmail' and updateCmd:
-        body[up] = getEmailAddress(noUid=True)
+      elif up == 'primaryEmail':
+        if updateCmd:
+          body[up] = getEmailAddress(noUid=True)
+        elif body[up] != getEmailAddress(noUid=True):
+          Cmd.Backup()
+          unknownArgumentExit()
       elif up == 'recoveryEmail':
         rcvryEmail = getEmailAddress(noUid=True, optional=True)
         body[up] = rcvryEmail if rcvryEmail is not None else ""
@@ -22210,7 +22221,7 @@ def getUserAttributes(cd, updateCmd, noUid=False):
         body[up] = getString(Cmd.OB_STRING, minLen=0)
         if body[up] and body[up][0] != '+':
           body[up] = '+' + body[up]
-      elif up == 'customerId' and updateCmd:
+      elif up == 'customerId':
         body[up] = getString(Cmd.OB_STRING)
       elif up == 'orgUnitPath':
         body[up] = getOrgUnitItem(pathOnly=True)
@@ -26709,7 +26720,7 @@ def normalizePrinterScopeList(rawScopeList):
   return scopeList
 
 def getPrinterACLScopeEntity():
-  groupMemberType = getChoice({'usersonly': 'USER', 'groupsonly': 'GROUP'}, defaultChoice='ALL', mapChoice=True)
+  groupMemberType = getChoice({'usersonly': Ent.TYPE_USER, 'groupsonly': Ent.TYPE_GROUP}, defaultChoice='ALL', mapChoice=True)
   _, scopeList = getEntityToModify(defaultEntityType=Cmd.ENTITY_USERS, groupMemberType=groupMemberType)
   printerScopeLists = scopeList if isinstance(scopeList, dict) else None
   if printerScopeLists is None:
@@ -36275,7 +36286,7 @@ def printShowUserGroups(users):
     else:
       unknownArgumentExit()
   if not rolesSet:
-    rolesSet = set([Ent.ROLE_MANAGER, Ent.ROLE_MEMBER, Ent.ROLE_OWNER])
+    rolesSet = ALL_GROUP_ROLES
   i, count, users = getEntityArgument(users)
   for user in users:
     i += 1
